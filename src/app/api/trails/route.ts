@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { trailService } from '@/lib/data';
+import { db } from '@/lib/db';
+import { trails, trailSteps } from '@/lib/schema';
+import { eq, desc } from 'drizzle-orm';
 
 export async function GET(request: NextRequest) {
   try {
@@ -7,20 +9,40 @@ export async function GET(request: NextRequest) {
     const trailId = searchParams.get('trailId');
 
     if (trailId) {
-      // Get specific trail
-      const trail = await trailService.getTrailById(trailId);
+      // Get specific trail with steps
+      const trailResults = await db.select().from(trails).where(eq(trails.id, trailId));
+      const trail = trailResults[0];
 
       if (!trail) {
         return NextResponse.json({ error: 'Trail not found' }, { status: 404 });
       }
 
-      return NextResponse.json(trail);
+      // Get steps for this trail
+      const steps = await db.select().from(trailSteps).where(eq(trailSteps.trailId, trailId)).orderBy(trailSteps.stepIndex);
+
+      return NextResponse.json({
+        ...trail,
+        steps
+      });
     }
 
     // Return all published trails
-    const trails = await trailService.getPublishedTrails();
-    return NextResponse.json(trails || []);
+    const publishedTrails = await db.select().from(trails).where(eq(trails.isPublished, true)).orderBy(desc(trails.createdAt));
+
+    // Get steps for all trails
+    const allTrailsWithSteps = await Promise.all(
+      publishedTrails.map(async (trail) => {
+        const steps = await db.select().from(trailSteps).where(eq(trailSteps.trailId, trail.id)).orderBy(trailSteps.stepIndex);
+        return {
+          ...trail,
+          steps
+        };
+      })
+    );
+
+    return NextResponse.json(allTrailsWithSteps);
   } catch (error) {
+    console.error('Error fetching trails:', error);
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
 }
@@ -35,17 +57,33 @@ export async function POST(request: NextRequest) {
     }
 
     // Create trail
-    const newTrail = await trailService.createTrail({
+    const newTrail = await db.insert(trails).values({
       title: trail.title,
       description: trail.description || '',
-      creator_id: trail.creator_id || 'anonymous',
-      is_published: type === 'published',
+      creatorId: trail.creator_id || 'anonymous',
+      isPublished: type === 'published',
       price: trail.price || null,
-      steps: trail.steps || []
-    });
+    }).returning();
 
-    return NextResponse.json({ success: true, trail: newTrail });
+    const createdTrail = newTrail[0];
+
+    // Create steps if provided
+    if (trail.steps && trail.steps.length > 0) {
+      const stepsToInsert = trail.steps.map((step: any, index: number) => ({
+        trailId: createdTrail.id,
+        title: step.title,
+        content: step.content,
+        stepIndex: index,
+        videoUrl: step.video_url || null,
+        skipCost: step.skip_cost || null
+      }));
+
+      await db.insert(trailSteps).values(stepsToInsert);
+    }
+
+    return NextResponse.json({ success: true, trail: createdTrail });
   } catch (error) {
+    console.error('Error creating trail:', error);
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
 }
@@ -59,14 +97,15 @@ export async function PUT(request: NextRequest) {
       return NextResponse.json({ error: 'Missing trail ID' }, { status: 400 });
     }
 
-    const updatedTrail = await trailService.updateTrail(trailId, updates);
+    const updatedTrail = await db.update(trails).set(updates).where(eq(trails.id, trailId)).returning();
 
-    if (!updatedTrail) {
+    if (!updatedTrail.length) {
       return NextResponse.json({ error: 'Trail not found' }, { status: 404 });
     }
 
-    return NextResponse.json({ success: true, trail: updatedTrail });
+    return NextResponse.json({ success: true, trail: updatedTrail[0] });
   } catch (error) {
+    console.error('Error updating trail:', error);
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
 }
@@ -80,14 +119,16 @@ export async function DELETE(request: NextRequest) {
       return NextResponse.json({ error: 'Missing trail ID' }, { status: 400 });
     }
 
-    const success = await trailService.deleteTrail(trailId);
+    // Delete trail (steps will be deleted automatically due to CASCADE)
+    const deletedTrail = await db.delete(trails).where(eq(trails.id, trailId)).returning();
 
-    if (!success) {
+    if (!deletedTrail.length) {
       return NextResponse.json({ error: 'Trail not found' }, { status: 404 });
     }
 
     return NextResponse.json({ success: true });
   } catch (error) {
+    console.error('Error deleting trail:', error);
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
 } 

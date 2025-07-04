@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { userService } from '@/lib/data';
+import { db } from '@/lib/db';
+import { users } from '@/lib/schema';
+import { eq } from 'drizzle-orm';
 
 export async function POST(request: NextRequest) {
   try {
@@ -12,9 +14,11 @@ export async function POST(request: NextRequest) {
           return NextResponse.json({ error: 'Email and password required' }, { status: 400 });
         }
 
-        const user = await userService.authenticateUser(email, password);
+        // Find user in database
+        const userResults = await db.select().from(users).where(eq(users.email, email));
+        const user = userResults[0];
 
-        if (!user) {
+        if (!user || user.password !== password) {
           return NextResponse.json({ error: 'Invalid email or password' }, { status: 401 });
         }
 
@@ -34,20 +38,29 @@ export async function POST(request: NextRequest) {
         }
 
         try {
-          const newUser = await userService.createUser(email, password, name);
+          // Check if user already exists
+          const existingUsers = await db.select().from(users).where(eq(users.email, email));
+          if (existingUsers.length > 0) {
+            return NextResponse.json({ error: 'User already exists' }, { status: 400 });
+          }
+
+          // Create new user
+          const newUser = await db.insert(users).values({
+            email,
+            password, // In production, this should be hashed
+            name,
+          }).returning();
 
           return NextResponse.json({ 
             success: true, 
             user: { 
-              id: newUser.id, 
-              email: newUser.email, 
-              name: newUser.name 
+              id: newUser[0].id, 
+              email: newUser[0].email, 
+              name: newUser[0].name 
             } 
           });
         } catch (error) {
-          if (error instanceof Error && error.message === 'User already exists') {
-            return NextResponse.json({ error: 'User already exists' }, { status: 400 });
-          }
+          console.error('Error creating user:', error);
           return NextResponse.json({ error: 'Failed to create user' }, { status: 500 });
         }
       }
@@ -62,6 +75,7 @@ export async function POST(request: NextRequest) {
       }
     }
   } catch (error) {
+    console.error('Auth error:', error);
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
 }
