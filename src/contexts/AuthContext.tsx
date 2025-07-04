@@ -215,19 +215,8 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
         return false;
       }
 
-      // Transform the user data to match the expected interface
-      const userData: User = {
-        id: data.user.id,
-        email: data.user.email,
-        name: data.user.name || name,
-        avatar: undefined,
-        createdAt: new Date().toISOString(),
-      };
-
-      setUser(userData);
-      setIsAuthenticated(true);
-      localStorage.setItem('currentUser', JSON.stringify(userData));
-      toast.success('Check your email for a confirmation link!');
+      // Don't log the user in immediately after signup - they need to confirm their email
+      // Just return success so the frontend can show the email confirmation modal
       return true;
     } catch (error) {
       console.error('Signup error:', error);

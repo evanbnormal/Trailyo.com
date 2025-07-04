@@ -53,8 +53,8 @@ const LoginModal: React.FC<LoginModalProps> = ({ isOpen, onClose, onSuccess }) =
         setLoginEmail('');
         setLoginPassword('');
       } else {
-        setConfirmationEmail(loginEmail);
-        setShowEmailConfirmation(true);
+        // Do NOT show the email confirmation modal on login failure
+        // Just show an error toast (already handled in login)
       }
     } finally {
       setIsLoading(false);
