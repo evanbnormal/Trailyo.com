@@ -197,9 +197,14 @@ const LearnerView: React.FC = () => {
       // Load fallback trail for test route or when no trailId
       console.log('Loading fallback trail for test route');
       if (isMounted) {
-        setTrail(fallbackTrail);
+        setTrail({
+          ...fallbackTrail,
+          status: fallbackTrail.status || 'published',
+          createdAt: fallbackTrail.createdAt || new Date().toISOString(),
+          views: fallbackTrail.views || 0,
+          earnings: fallbackTrail.earnings || 0,
+        } as Trail);
         setTrailLoaded(true);
-        
         // Track trail view for demo trail
         analyticsService.trackTrailView('demo-trail', fallbackTrail.title);
       }
@@ -469,7 +474,6 @@ const LearnerView: React.FC = () => {
       setCompleted(true);
       // Track trail completion
       analyticsService.trackTrailComplete(trail.id);
-      analyticsService.saveAnalytics(); // Save analytics when trail is completed
       return;
     }
 
@@ -770,7 +774,6 @@ const LearnerView: React.FC = () => {
                     
                     // Track tip donation
                     analyticsService.trackTipDonated(trail.id, finalTipAmount);
-                    analyticsService.saveAnalytics(); // Save analytics when tip is donated
                     
                     toast({
                       title: "Thank you!",

@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 import { toast } from 'sonner';
+import { Trail } from "@/lib/supabase";
 
 interface User {
   id: string;
@@ -17,8 +18,8 @@ interface AuthContextType {
   signup: (email: string, password: string, name: string) => Promise<boolean>;
   logout: (redirectCallback?: () => void) => void;
   resetPassword: (email: string, newPassword: string) => Promise<boolean>;
-  getUserTrails: () => Promise<{ drafts: any[]; published: any[] }>;
-  saveUserTrail: (trail: any, type: 'draft' | 'published') => Promise<void>;
+  getUserTrails: () => Promise<{ drafts: Trail[]; published: Trail[] }>;
+  saveUserTrail: (trail: Trail, type: 'draft' | 'published') => Promise<void>;
   deleteUserTrail: (trailId: string, type: 'draft' | 'published') => Promise<void>;
 }
 
@@ -272,7 +273,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     }
   };
 
-  const getUserTrails = async (): Promise<{ drafts: any[]; published: any[] }> => {
+  const getUserTrails = async (): Promise<{ drafts: Trail[]; published: Trail[] }> => {
     if (!user) return { drafts: [], published: [] };
 
     try {
@@ -291,7 +292,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     }
   };
 
-  const saveUserTrail = async (trail: any, type: 'draft' | 'published'): Promise<void> => {
+  const saveUserTrail = async (trail: Trail, type: 'draft' | 'published'): Promise<void> => {
     if (!user) return;
 
     try {
