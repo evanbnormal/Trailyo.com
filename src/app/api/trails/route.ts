@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { supabase } from '@/lib/supabase';
+import { trailService } from '@/lib/data';
 
 export async function GET(request: NextRequest) {
   try {
@@ -7,17 +7,10 @@ export async function GET(request: NextRequest) {
     const trailId = searchParams.get('trailId');
 
     if (trailId) {
-      // Get specific trail with steps
-      const { data: trail, error: trailError } = await supabase
-        .from('trails')
-        .select(`
-          *,
-          steps:trail_steps(*)
-        `)
-        .eq('id', trailId)
-        .single();
+      // Get specific trail
+      const trail = await trailService.getTrailById(trailId);
 
-      if (trailError) {
+      if (!trail) {
         return NextResponse.json({ error: 'Trail not found' }, { status: 404 });
       }
 
@@ -25,19 +18,7 @@ export async function GET(request: NextRequest) {
     }
 
     // Return all published trails
-    const { data: trails, error } = await supabase
-      .from('trails')
-      .select(`
-        *,
-        steps:trail_steps(*)
-      `)
-      .eq('is_published', true)
-      .order('created_at', { ascending: false });
-
-    if (error) {
-      return NextResponse.json({ error: 'Failed to fetch trails' }, { status: 500 });
-    }
-
+    const trails = await trailService.getPublishedTrails();
     return NextResponse.json(trails || []);
   } catch (error) {
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
@@ -53,42 +34,15 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Missing required fields' }, { status: 400 });
     }
 
-    // Insert trail
-    const { data: newTrail, error: trailError } = await supabase
-      .from('trails')
-      .insert({
-        title: trail.title,
-        description: trail.description || '',
-        creator_id: trail.creator_id || 'anonymous',
-        is_published: type === 'published',
-        price: trail.price || null
-      })
-      .select()
-      .single();
-
-    if (trailError) {
-      return NextResponse.json({ error: 'Failed to create trail' }, { status: 500 });
-    }
-
-    // Insert steps if provided
-    if (trail.steps && trail.steps.length > 0) {
-      const stepsToInsert = trail.steps.map((step: any, index: number) => ({
-        trail_id: newTrail.id,
-        title: step.title,
-        content: step.content,
-        step_index: index,
-        video_url: step.video_url || null,
-        skip_cost: step.skip_cost || null
-      }));
-
-      const { error: stepsError } = await supabase
-        .from('trail_steps')
-        .insert(stepsToInsert);
-
-      if (stepsError) {
-        return NextResponse.json({ error: 'Failed to create trail steps' }, { status: 500 });
-      }
-    }
+    // Create trail
+    const newTrail = await trailService.createTrail({
+      title: trail.title,
+      description: trail.description || '',
+      creator_id: trail.creator_id || 'anonymous',
+      is_published: type === 'published',
+      price: trail.price || null,
+      steps: trail.steps || []
+    });
 
     return NextResponse.json({ success: true, trail: newTrail });
   } catch (error) {
@@ -105,15 +59,10 @@ export async function PUT(request: NextRequest) {
       return NextResponse.json({ error: 'Missing trail ID' }, { status: 400 });
     }
 
-    const { data: updatedTrail, error } = await supabase
-      .from('trails')
-      .update(updates)
-      .eq('id', trailId)
-      .select()
-      .single();
+    const updatedTrail = await trailService.updateTrail(trailId, updates);
 
-    if (error) {
-      return NextResponse.json({ error: 'Failed to update trail' }, { status: 500 });
+    if (!updatedTrail) {
+      return NextResponse.json({ error: 'Trail not found' }, { status: 404 });
     }
 
     return NextResponse.json({ success: true, trail: updatedTrail });
@@ -131,24 +80,10 @@ export async function DELETE(request: NextRequest) {
       return NextResponse.json({ error: 'Missing trail ID' }, { status: 400 });
     }
 
-    // Delete trail steps first (due to foreign key constraint)
-    const { error: stepsError } = await supabase
-      .from('trail_steps')
-      .delete()
-      .eq('trail_id', trailId);
+    const success = await trailService.deleteTrail(trailId);
 
-    if (stepsError) {
-      return NextResponse.json({ error: 'Failed to delete trail steps' }, { status: 500 });
-    }
-
-    // Delete trail
-    const { error } = await supabase
-      .from('trails')
-      .delete()
-      .eq('id', trailId);
-
-    if (error) {
-      return NextResponse.json({ error: 'Failed to delete trail' }, { status: 500 });
+    if (!success) {
+      return NextResponse.json({ error: 'Trail not found' }, { status: 404 });
     }
 
     return NextResponse.json({ success: true });

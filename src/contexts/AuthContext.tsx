@@ -1,6 +1,6 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 import { toast } from 'sonner';
-import { Trail } from "@/lib/supabase";
+import { Trail } from "@/lib/data";
 
 interface User {
   id: string;

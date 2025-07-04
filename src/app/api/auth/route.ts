@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { supabase } from '@/lib/supabase';
+import { userService } from '@/lib/data';
 
 export async function POST(request: NextRequest) {
   try {
@@ -7,68 +7,59 @@ export async function POST(request: NextRequest) {
     const { action, email, password, name } = body;
 
     switch (action) {
-      case 'login':
+      case 'login': {
         if (!email || !password) {
           return NextResponse.json({ error: 'Email and password required' }, { status: 400 });
         }
 
-        const { data: { user }, error: signInError } = await supabase.auth.signInWithPassword({
-          email,
-          password
-        });
+        const user = await userService.authenticateUser(email, password);
 
-        if (signInError) {
-          return NextResponse.json({ error: signInError.message }, { status: 401 });
+        if (!user) {
+          return NextResponse.json({ error: 'Invalid email or password' }, { status: 401 });
         }
 
         return NextResponse.json({ 
           success: true, 
           user: { 
-            id: user?.id, 
-            email: user?.email, 
-            name: user?.user_metadata?.full_name 
+            id: user.id, 
+            email: user.email, 
+            name: user.name 
           } 
         });
+      }
 
-      case 'signup':
+      case 'signup': {
         if (!email || !password || !name) {
           return NextResponse.json({ error: 'Email, password, and name required' }, { status: 400 });
         }
 
-        const { data: { user: newUser }, error: signUpError } = await supabase.auth.signUp({
-          email,
-          password,
-          options: {
-            data: {
-              full_name: name
-            }
+        try {
+          const newUser = await userService.createUser(email, password, name);
+
+          return NextResponse.json({ 
+            success: true, 
+            user: { 
+              id: newUser.id, 
+              email: newUser.email, 
+              name: newUser.name 
+            } 
+          });
+        } catch (error) {
+          if (error instanceof Error && error.message === 'User already exists') {
+            return NextResponse.json({ error: 'User already exists' }, { status: 400 });
           }
-        });
-
-        if (signUpError) {
-          return NextResponse.json({ error: signUpError.message }, { status: 400 });
+          return NextResponse.json({ error: 'Failed to create user' }, { status: 500 });
         }
+      }
 
-        return NextResponse.json({ 
-          success: true, 
-          user: { 
-            id: newUser?.id, 
-            email: newUser?.email, 
-            name: newUser?.user_metadata?.full_name 
-          } 
-        });
-
-      case 'logout':
-        const { error: signOutError } = await supabase.auth.signOut();
-        
-        if (signOutError) {
-          return NextResponse.json({ error: signOutError.message }, { status: 500 });
-        }
-
+      case 'logout': {
+        // For our simple implementation, logout is handled client-side
         return NextResponse.json({ success: true });
+      }
 
-      default:
+      default: {
         return NextResponse.json({ error: 'Invalid action' }, { status: 400 });
+      }
     }
   } catch (error) {
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
@@ -77,19 +68,9 @@ export async function POST(request: NextRequest) {
 
 export async function GET(request: NextRequest) {
   try {
-    const { data: { user }, error } = await supabase.auth.getUser();
-    
-    if (error || !user) {
-      return NextResponse.json({ user: null });
-    }
-
-    return NextResponse.json({ 
-      user: { 
-        id: user.id, 
-        email: user.email, 
-        name: user.user_metadata?.full_name 
-      } 
-    });
+    // For now, we'll return null since we don't have session management
+    // In a real app, you'd implement proper session management
+    return NextResponse.json({ user: null });
   } catch (error) {
     return NextResponse.json({ user: null });
   }
