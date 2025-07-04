@@ -27,6 +27,9 @@ interface TrailStep {
   source: string;
   thumbnailUrl?: string;
   isSaved?: boolean;
+  trail_id: string;
+  step_index: number;
+  created_at: string;
 }
 
 // Use process.env for Next.js public env variables
@@ -573,7 +576,7 @@ const StepTimeline = ({
   
   // Calculate the center position for the current step
   let start = Math.max(0, currentStepIndex - Math.floor(MAX_DOTS / 2));
-  let end = Math.min(steps.length, start + MAX_DOTS);
+  const end = Math.min(steps.length, start + MAX_DOTS);
 
   // Adjust if we're near the end
   if (end - start < MAX_DOTS && start > 0) {
@@ -927,8 +930,8 @@ const CreatorView: React.FC = () => {
       if (steps.length === 0 && !showModal) {
         const initialStepId = `step-${Date.now()}`;
         setSteps([
-          { id: initialStepId, title: '', content: '', type: 'video', source: '', thumbnailUrl: '', isSaved: false },
-          { id: 'reward', title: '', content: '', type: 'reward', source: '', thumbnailUrl: '', isSaved: false }
+          { id: initialStepId, title: '', content: '', type: 'video', source: '', thumbnailUrl: '', isSaved: false, trail_id: '', step_index: 0, created_at: new Date().toISOString() },
+          { id: 'reward', title: '', content: '', type: 'reward', source: '', thumbnailUrl: '', isSaved: false, trail_id: '', step_index: 0, created_at: new Date().toISOString() }
         ]);
         setEditingStepId(initialStepId);
       }
@@ -993,6 +996,9 @@ const CreatorView: React.FC = () => {
       source: '',
       thumbnailUrl: '',
       isSaved: false,
+      trail_id: '',
+      step_index: 0,
+      created_at: new Date().toISOString()
     };
     
     const newSteps = [...steps];
@@ -1058,7 +1064,7 @@ const CreatorView: React.FC = () => {
     // Calculate which dots to show (max 3 visible at a time)
     const totalSteps = questions.length;
     let startIndex = Math.max(0, currentQuestion - 1);
-    let endIndex = Math.min(totalSteps, startIndex + 3);
+    const endIndex = Math.min(totalSteps, startIndex + 3);
     
     // Adjust if we're near the end
     if (endIndex - startIndex < 3 && startIndex > 0) {
@@ -1227,7 +1233,11 @@ const CreatorView: React.FC = () => {
       thumbnailUrl: steps.find(step => step.type === 'reward')?.thumbnailUrl || undefined,
       suggestedInvestment,
       trailValue,
-      trailCurrency
+      trailCurrency,
+      creator_id: '',
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+      is_published: false
     };
 
     try {
@@ -1321,7 +1331,11 @@ const CreatorView: React.FC = () => {
       shareableLink: `${window.location.origin}/trail/${trailId}`,
       suggestedInvestment,
       trailValue,
-      trailCurrency
+      trailCurrency,
+      creator_id: '',
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+      is_published: true
     };
 
     try {
