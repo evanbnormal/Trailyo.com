@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import sgMail from '@sendgrid/mail';
 import { db } from '@/lib/db';
-import bcrypt from 'bcrypt';
+import bcrypt from 'bcryptjs';
 
 // Debug log to confirm the API key is loaded
 console.log('SENDGRID_API_KEY:', process.env.SENDGRID_API_KEY);
