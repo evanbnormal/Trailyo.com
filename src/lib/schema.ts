@@ -1,5 +1,7 @@
-import { pgTable, text, timestamp, integer, boolean, jsonb, uuid } from 'drizzle-orm/pg-core';
-import { relations } from 'drizzle-orm';
+// This file is deprecated. Database schema is now managed by Prisma (see prisma/schema.prisma).
+
+// import { pgTable, text, timestamp, integer, boolean, jsonb, uuid } from 'drizzle-orm/pg-core';
+// import { relations } from 'drizzle-orm';
 
 // Users table
 export const users = pgTable('users', {

@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import sgMail from '@sendgrid/mail';
+import { db } from '@/lib/db';
+import bcrypt from 'bcrypt';
 
 // Debug log to confirm the API key is loaded
 console.log('SENDGRID_API_KEY:', process.env.SENDGRID_API_KEY);
@@ -8,7 +10,7 @@ console.log('SENDGRID_API_KEY:', process.env.SENDGRID_API_KEY);
 sgMail.setApiKey(process.env.SENDGRID_API_KEY!);
 
 // In-memory user store
-let users: any[] = [];
+// let users: any[] = [];
 
 export async function POST(request: NextRequest) {
   try {
@@ -20,8 +22,13 @@ export async function POST(request: NextRequest) {
         if (!email || !password) {
           return NextResponse.json({ error: 'Email and password required' }, { status: 400 });
         }
-        const user = users.find(u => u.email === email);
-        if (!user || user.password !== password) {
+        // Find user in Neon DB
+        const user = await db.user.findUnique({ where: { email } });
+        if (!user) {
+          return NextResponse.json({ error: 'Invalid email or password' }, { status: 401 });
+        }
+        const passwordMatch = await bcrypt.compare(password, user.password);
+        if (!passwordMatch) {
           return NextResponse.json({ error: 'Invalid email or password' }, { status: 401 });
         }
         return NextResponse.json({ 
@@ -36,8 +43,9 @@ export async function POST(request: NextRequest) {
         if (!email || !password || !name) {
           return NextResponse.json({ error: 'Email, password, and name required' }, { status: 400 });
         }
-        // Check if user already exists
-        if (users.find(u => u.email === email)) {
+        // Check if user already exists in Neon DB
+        const existingUser = await db.user.findUnique({ where: { email } });
+        if (existingUser) {
           return NextResponse.json({ error: 'User already exists' }, { status: 400 });
         }
         // Send confirmation email first
@@ -72,8 +80,15 @@ export async function POST(request: NextRequest) {
           console.error('SendGrid error:', e);
           return NextResponse.json({ error: 'Failed to send confirmation email' }, { status: 500 });
         }
-        // Only add user to in-memory store after email is sent successfully
-        users.push({ email, password, name, confirmed: false });
+        // Hash password and save user to Neon DB
+        const hashedPassword = await bcrypt.hash(password, 10);
+        await db.user.create({
+          data: {
+            email,
+            name,
+            password: hashedPassword,
+          }
+        });
         return NextResponse.json({ success: true });
       }
       case 'logout': {
