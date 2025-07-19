@@ -1,15 +1,47 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { CheckCircle } from 'lucide-react';
+import { toast } from 'sonner';
 
 interface EmailConfirmationModalProps {
   isOpen: boolean;
   onClose: () => void;
   email?: string;
+  name?: string;
 }
 
-const EmailConfirmationModal: React.FC<EmailConfirmationModalProps> = ({ isOpen, onClose, email }) => {
+const EmailConfirmationModal: React.FC<EmailConfirmationModalProps> = ({ isOpen, onClose, email, name }) => {
+  const [isResending, setIsResending] = useState(false);
+  const [resent, setResent] = useState(false);
+
+  const handleResend = async () => {
+    if (!email || !name) {
+      toast.error('Missing email or name');
+      return;
+    }
+    setIsResending(true);
+    setResent(false);
+    try {
+      const res = await fetch('/api/auth/resend-confirmation', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email, name }),
+      });
+      const data = await res.json();
+      if (res.ok && data.success) {
+        toast.success('Confirmation email resent!');
+        setResent(true);
+      } else {
+        toast.error(data.error || 'Failed to resend confirmation email');
+      }
+    } catch (e) {
+      toast.error('Failed to resend confirmation email');
+    } finally {
+      setIsResending(false);
+    }
+  };
+
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
       <DialogContent className="sm:max-w-md text-center flex flex-col items-center justify-center py-10">
@@ -27,6 +59,16 @@ const EmailConfirmationModal: React.FC<EmailConfirmationModalProps> = ({ isOpen,
         <Button className="mt-4 w-full max-w-xs" onClick={onClose} autoFocus>
           Okay, got it!
         </Button>
+        <div className="mt-2">
+          <button
+            className="text-sm text-gray-600 underline hover:text-gray-800 disabled:opacity-60"
+            onClick={handleResend}
+            disabled={isResending || resent}
+            type="button"
+          >
+            {isResending ? 'Resending...' : resent ? 'Confirmation Email Sent!' : 'Resend confirmation email'}
+          </button>
+        </div>
       </DialogContent>
     </Dialog>
   );

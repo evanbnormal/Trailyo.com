@@ -14,8 +14,8 @@ interface User {
 interface AuthContextType {
   user: User | null;
   isAuthenticated: boolean;
-  login: (email: string, password: string) => Promise<boolean>;
-  signup: (email: string, password: string, name: string) => Promise<boolean>;
+  login: (email: string, password: string) => Promise<boolean | { status: 'unconfirmed_user', name?: string }>;
+  signup: (email: string, password: string, name: string) => Promise<boolean | 'unconfirmed_user'>;
   logout: (redirectCallback?: () => void) => void;
   resetPassword: (email: string, newPassword: string) => Promise<boolean>;
   getUserTrails: () => Promise<{ drafts: Trail[]; published: Trail[] }>;
@@ -151,7 +151,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     checkSession();
   }, []);
 
-  const login = async (email: string, password: string): Promise<boolean> => {
+  const login = async (email: string, password: string): Promise<boolean | { status: 'unconfirmed_user', name?: string }> => {
     try {
       const response = await fetch('/api/auth', {
         method: 'POST',
@@ -170,6 +170,11 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       if (!response.ok) {
         toast.error(data.error || 'Login failed');
         return false;
+      }
+
+      if (data.status === 'unconfirmed_user') {
+        toast.info('Confirmation email resent. Please check your inbox.');
+        return { status: 'unconfirmed_user', name: data.name };
       }
 
       // Transform the user data to match the expected interface
@@ -193,7 +198,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     }
   };
 
-  const signup = async (email: string, password: string, name: string): Promise<boolean> => {
+  const signup = async (email: string, password: string, name: string): Promise<boolean | 'unconfirmed_user'> => {
     try {
       const response = await fetch('/api/auth', {
         method: 'POST',
@@ -213,6 +218,11 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       if (!response.ok) {
         toast.error(data.error || 'Signup failed');
         return false;
+      }
+
+      if (data.status === 'unconfirmed_user') {
+        toast.info('Confirmation email resent. Please check your inbox.');
+        return 'unconfirmed_user';
       }
 
       // Don't log the user in immediately after signup - they need to confirm their email

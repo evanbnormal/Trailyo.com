@@ -14,15 +14,16 @@ datasource db {
 }
 
 model User {
-  id        String   @id @default(uuid())
-  email     String   @unique
-  name      String
-  password  String
-  avatar    String?
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-  trails    Trail[]
-  analytics AnalyticsEvent[]
+  id          String   @id @default(uuid())
+  email       String   @unique
+  name        String
+  password    String
+  avatar      String?
+  confirmedAt DateTime?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  trails      Trail[]
+  analytics   AnalyticsEvent[]
 }
 
 model Trail {
@@ -53,5 +54,13 @@ model AnalyticsEvent {
   userId    String?
   event     String
   metadata  Json?
+  createdAt DateTime @default(now())
+}
+
+model ResetToken {
+  id        String   @id @default(uuid())
+  email     String
+  token     String   @unique
+  expires   DateTime
   createdAt DateTime @default(now())
 }

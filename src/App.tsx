@@ -13,6 +13,7 @@ import PublishConfirmation from "./pages/PublishConfirmation";
 import TrailAnalytics from "./pages/TrailAnalytics";
 import NotFound from "./pages/NotFound";
 import AuthCallback from "./pages/AuthCallback";
+import ResetPassword from "./pages/ResetPassword";
 
 const queryClient = new QueryClient();
 
@@ -35,6 +36,7 @@ const App = () => (
               <Route path="/publish-confirmation" element={<PublishConfirmation />} />
               <Route path="/trail-analytics/:trailId" element={<TrailAnalytics />} />
               <Route path="/auth/callback" element={<AuthCallback />} />
+              <Route path="/reset-password" element={<ResetPassword />} />
               {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
               <Route path="*" element={<NotFound />} />
             </Routes>

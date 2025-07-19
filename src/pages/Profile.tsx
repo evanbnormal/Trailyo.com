@@ -75,58 +75,6 @@ const Profile: React.FC = () => {
 
       const { drafts, published } = await getUserTrails();
       
-      // If no trails exist, initialize with sample data for new users
-      if (drafts.length === 0 && published.length === 0) {
-        const sampleDrafts = [
-          {
-            id: 'draft-1',
-            title: 'Advanced React Patterns',
-            description: 'Master advanced React concepts and patterns for scalable applications',
-            status: 'draft' as const,
-            createdAt: '2024-01-20',
-            views: 0,
-            earnings: 0,
-            steps: [
-              { id: 'step-1', title: 'Introduction', content: '', type: 'video' as const, source: '', thumbnailUrl: 'https://images.unsplash.com/photo-1633356122544-f134324a6cee?w=400&h=300&fit=crop' }
-            ],
-            thumbnailUrl: 'https://images.unsplash.com/photo-1633356122544-f134324a6cee?w=400&h=300&fit=crop',
-            suggestedInvestment: 25,
-            trailValue: 150,
-            trailCurrency: 'USD'
-          }
-        ];
-
-        const samplePublished = [
-          {
-            id: 'published-1',
-            title: 'JavaScript Fundamentals',
-            description: 'Learn the basics of JavaScript programming',
-            status: 'published' as const,
-            createdAt: '2024-01-15',
-            views: 1250,
-            earnings: 45.50,
-            steps: [
-              { id: 'step-1', title: 'Variables and Data Types', content: 'Learn about variables, strings, numbers, and booleans', type: 'video' as const, source: 'https://www.youtube.com/watch?v=W6NZfCO5SIk', thumbnailUrl: 'https://images.unsplash.com/photo-1627398242454-45a1465c2479?w=400&h=300&fit=crop' },
-              { id: 'step-2', title: 'Functions', content: 'Understanding function declarations and expressions', type: 'video' as const, source: 'https://www.youtube.com/watch?v=xUI5Tsl2JpY', thumbnailUrl: 'https://images.unsplash.com/photo-1555066931-4365d14bab8c?w=400&h=300&fit=crop' },
-              { id: 'reward-1', title: 'JavaScript Cheat Sheet', content: 'Download your comprehensive JavaScript cheat sheet', type: 'reward' as const, source: 'https://example.com/js-cheatsheet.pdf', thumbnailUrl: 'https://images.unsplash.com/photo-1555066931-4365d14bab8c?w=400&h=300&fit=crop' }
-            ],
-            thumbnailUrl: 'https://images.unsplash.com/photo-1627398242454-45a1465c2479?w=400&h=300&fit=crop',
-            shareableLink: 'https://trailyo.com/trail/javascript-fundamentals',
-            suggestedInvestment: 15,
-            trailValue: 75,
-            trailCurrency: 'USD'
-          }
-        ];
-
-        // Save sample data
-        for (const trail of sampleDrafts) {
-          await saveUserTrail(trail, 'draft');
-        }
-        for (const trail of samplePublished) {
-          await saveUserTrail(trail, 'published');
-        }
-      }
-
       // Combine and sort all trails by creation date
       const allTrails = [...drafts, ...published].sort((a, b) => 
         new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
@@ -494,43 +442,55 @@ const Profile: React.FC = () => {
             <TabsTrigger value="saved" className="data-[state=active]:bg-black data-[state=active]:text-white data-[state=active]:rounded-md data-[state=active]:px-4 data-[state=active]:py-1.5">Saved</TabsTrigger>
           </TabsList>
           <TabsContent value="saved">
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mt-6">
+            <div className="mt-6">
               {savedTrails.length === 0 ? (
-                <span className="text-gray-500">No saved trails</span>
+                <div className="flex flex-col items-center justify-center py-12">
+                  <span className="text-gray-500 text-lg font-medium">No saved trails</span>
+                </div>
               ) : (
-                savedTrails.map((trail: Trail) => (
-                  <SavedTrailCard key={trail.id} trail={trail} onClick={() => window.open(trail.shareableLink || `/learner/${trail.id}`, '_self')} />
-                ))
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                  {savedTrails.map((trail: Trail) => (
+                    <SavedTrailCard key={trail.id} trail={trail} onClick={() => window.open(trail.shareableLink || `/learner/${trail.id}`, '_self')} />
+                  ))}
+                </div>
               )}
             </div>
           </TabsContent>
-          <TabsContent value="drafts" className="space-y-6">
-            {draftTrails.length === 0 ? (
-              <span className="text-gray-500">No draft trails</span>
-            ) : (
-              <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-2 gap-6">
-                {draftTrails.map((trail) => (
-                  <div key={trail.id} className="relative group cursor-pointer" onClick={() => handleEditTrail(trail)}>
-                    <TrailCard trail={trail} />
-                    <div className="absolute inset-0 bg-black/0 group-hover:bg-black/5 transition-colors duration-200 rounded-lg pointer-events-none" />
-                  </div>
-                ))}
-              </div>
-            )}
+          <TabsContent value="drafts">
+            <div className="mt-6">
+              {draftTrails.length === 0 ? (
+                <div className="flex flex-col items-center justify-center py-12">
+                  <span className="text-gray-500 text-lg font-medium">No draft trails</span>
+                </div>
+              ) : (
+                <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-2 gap-6">
+                  {draftTrails.map((trail) => (
+                    <div key={trail.id} className="relative group cursor-pointer" onClick={() => handleEditTrail(trail)}>
+                      <TrailCard trail={trail} />
+                      <div className="absolute inset-0 bg-black/0 group-hover:bg-black/5 transition-colors duration-200 rounded-lg pointer-events-none" />
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
           </TabsContent>
-          <TabsContent value="published" className="space-y-6">
-            {publishedTrails.length === 0 ? (
-              <span className="text-gray-500">No published trails</span>
-            ) : (
-              <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-2 gap-6">
-                {publishedTrails.map((trail) => (
-                  <div key={trail.id} className="relative group cursor-pointer">
-                    <TrailCard trail={trail} isPublished={true} />
-                    <div className="absolute inset-0 bg-black/0 group-hover:bg-black/5 transition-colors duration-200 rounded-lg pointer-events-none" />
-                  </div>
-                ))}
-              </div>
-            )}
+          <TabsContent value="published">
+            <div className="mt-6">
+              {publishedTrails.length === 0 ? (
+                <div className="flex flex-col items-center justify-center py-12">
+                  <span className="text-gray-500 text-lg font-medium">No published trails</span>
+                </div>
+              ) : (
+                <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-2 gap-6">
+                  {publishedTrails.map((trail) => (
+                    <div key={trail.id} className="relative group cursor-pointer">
+                      <TrailCard trail={trail} isPublished={true} />
+                      <div className="absolute inset-0 bg-black/0 group-hover:bg-black/5 transition-colors duration-200 rounded-lg pointer-events-none" />
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
           </TabsContent>
         </Tabs>
       </div>

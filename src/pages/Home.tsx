@@ -6,10 +6,32 @@ import { Button } from '@/components/ui/button';
 import { Plus } from 'lucide-react';
 import LoginModal from '@/components/LoginModal';
 import { useAuth } from '@/contexts/AuthContext';
+import { useSearchParams } from 'next/navigation';
 
 const Home: React.FC = () => {
   const [showLoginModal, setShowLoginModal] = useState(false);
   const { isAuthenticated } = useAuth();
+  const searchParams = typeof window !== 'undefined' ? new URLSearchParams(window.location.search) : null;
+
+  useEffect(() => {
+    if (searchParams && searchParams.get('showLogin') === '1') {
+      setShowLoginModal(true);
+      // Optionally, remove the param from the URL after opening
+      const url = new URL(window.location.href);
+      url.searchParams.delete('showLogin');
+      window.history.replaceState({}, '', url.pathname + url.search);
+    }
+    
+    // Handle email confirmation success
+    if (searchParams && searchParams.get('confirmed') === 'true') {
+      // Show success message
+      alert('Email confirmed successfully! You can now sign in.');
+      // Remove the param from the URL
+      const url = new URL(window.location.href);
+      url.searchParams.delete('confirmed');
+      window.history.replaceState({}, '', url.pathname + url.search);
+    }
+  }, []);
 
   const handleCreateTrail = () => {
     if (isAuthenticated) {

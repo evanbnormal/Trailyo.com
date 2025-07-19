@@ -14,6 +14,7 @@ import Profile from "@/pages/Profile";
 import PublishConfirmation from "@/pages/PublishConfirmation";
 import TrailAnalytics from "@/pages/TrailAnalytics";
 import NotFound from "@/pages/NotFound";
+import ResetPassword from "@/pages/ResetPassword";
 
 const queryClient = new QueryClient();
 
@@ -34,6 +35,7 @@ export default function AppComponent() {
                 <Route path="/test-trail" element={<LearnerView />} />
                 <Route path="/creator" element={<CreatorView />} />
                 <Route path="/profile" element={<Profile />} />
+                <Route path="/reset-password" element={<ResetPassword />} />
                 <Route path="/publish-confirmation" element={<PublishConfirmation />} />
                 <Route path="/trail-analytics/:trailId" element={<TrailAnalytics />} />
                 {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
