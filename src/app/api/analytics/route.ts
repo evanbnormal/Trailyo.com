@@ -1,7 +1,4 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { db } from '@/lib/db';
-import { analyticsEvents } from '@/lib/schema';
-import { eq, desc } from 'drizzle-orm';
 import { calculateAnalytics } from '@/lib/data';
 
 export async function GET(request: NextRequest) {
@@ -9,35 +6,19 @@ export async function GET(request: NextRequest) {
     const { searchParams } = new URL(request.url);
     const trailId = searchParams.get('trailId');
 
+    // For now, return empty analytics since we're not using a database
+    // This can be implemented later when we have proper analytics storage
     if (trailId) {
-      // Get analytics for specific trail
-      const events = await db.select().from(analyticsEvents).where(eq(analyticsEvents.trailId, trailId)).orderBy(analyticsEvents.createdAt);
-
-      // Calculate analytics from events
-      const analytics = calculateAnalytics(events as any[], trailId);
-      return NextResponse.json(analytics);
+      return NextResponse.json({
+        trailId,
+        views: 0,
+        completions: 0,
+        averageTime: 0,
+        events: []
+      });
     }
 
-    // Return all analytics
-    const allEvents = await db.select().from(analyticsEvents).orderBy(desc(analyticsEvents.createdAt));
-
-    // Group events by trail and calculate analytics
-    const trailGroups = allEvents.reduce((acc: Record<string, unknown[]>, event) => {
-      if (!acc[event.trailId]) {
-        acc[event.trailId] = [];
-      }
-      acc[event.trailId].push(event);
-      return acc;
-    }, {});
-
-    const allAnalytics = Object.fromEntries(
-      Object.entries(trailGroups).map(([trailId, events]) => [
-        trailId,
-        calculateAnalytics(events as any[], trailId)
-      ])
-    );
-
-    return NextResponse.json(allAnalytics);
+    return NextResponse.json({});
   } catch (error) {
     console.error('Error fetching analytics:', error);
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
@@ -53,12 +34,8 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Missing required fields' }, { status: 400 });
     }
 
-    // Record the event
-    await db.insert(analyticsEvents).values({
-      trailId,
-      eventType,
-      data: data || {},
-    });
+    // For now, just log the event since we're not storing analytics
+    console.log('Analytics event:', { trailId, eventType, data });
 
     return NextResponse.json({ success: true });
   } catch (error) {

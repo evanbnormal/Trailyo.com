@@ -1,7 +1,7 @@
 'use client'
 
 import React, { useState, useEffect } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Plus } from 'lucide-react';
 import LoginModal from '@/components/LoginModal';
@@ -11,6 +11,7 @@ import { useSearchParams } from 'next/navigation';
 const Home: React.FC = () => {
   const [showLoginModal, setShowLoginModal] = useState(false);
   const { isAuthenticated } = useAuth();
+  const navigate = useNavigate();
   const searchParams = typeof window !== 'undefined' ? new URLSearchParams(window.location.search) : null;
 
   useEffect(() => {
@@ -36,7 +37,7 @@ const Home: React.FC = () => {
   const handleCreateTrail = () => {
     if (isAuthenticated) {
       // User is signed in, navigate to creator
-      window.location.href = '/creator';
+      navigate('/creator');
     } else {
       // User is not signed in, show login modal
       setShowLoginModal(true);

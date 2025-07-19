@@ -4,7 +4,7 @@ import axios from 'axios';
 console.log('[Proxy] Starting Bun server...');
 
 Bun.serve({
-  port: 3001,
+  port: 3002,
   async fetch(req) {
     const url = new URL(req.url);
 
@@ -28,17 +28,26 @@ Bun.serve({
       }
 
       try {
-        const microlinkUrl = `https://api.microlink.io/?url=${encodeURIComponent(targetUrl)}`;
-        console.log(`[Proxy] Calling Microlink API: ${microlinkUrl}`);
-
-        const microlinkRes = await axios.get(microlinkUrl, {
-          headers: { 'x-api-key': process.env.MICROLINK_API_KEY },
+        // Try to fetch the webpage and look for Open Graph or Twitter meta tags
+        const response = await axios.get(targetUrl, {
+          timeout: 5000,
+          headers: {
+            'User-Agent': 'Mozilla/5.0 (compatible; TrailyoBot/1.0)',
+          },
         });
 
-        const imageUrl = microlinkRes.data.data?.image?.url || microlinkRes.data.data?.logo?.url;
-
-        if (imageUrl) {
-          const imageRes = await axios.get(imageUrl, { responseType: 'arraybuffer' });
+        const html = response.data;
+        
+        // Look for Open Graph image
+        const ogImageMatch = html.match(/<meta[^>]*property=["']og:image["'][^>]*content=["']([^"']+)["'][^>]*>/i);
+        if (ogImageMatch) {
+          const imageUrl = ogImageMatch[1];
+          console.log(`[Proxy] Found Open Graph image: ${imageUrl}`);
+          
+          const imageRes = await axios.get(imageUrl, { 
+            responseType: 'arraybuffer',
+            timeout: 5000,
+          });
           const contentType = imageRes.headers['content-type'];
           
           return new Response(imageRes.data, {
@@ -47,9 +56,63 @@ Bun.serve({
               'Content-Type': contentType,
             },
           });
-        } else {
-          return new Response('No image found', { status: 404 });
         }
+        
+        // Look for Twitter image
+        const twitterImageMatch = html.match(/<meta[^>]*name=["']twitter:image["'][^>]*content=["']([^"']+)["'][^>]*>/i);
+        if (twitterImageMatch) {
+          const imageUrl = twitterImageMatch[1];
+          console.log(`[Proxy] Found Twitter image: ${imageUrl}`);
+          
+          const imageRes = await axios.get(imageUrl, { 
+            responseType: 'arraybuffer',
+            timeout: 5000,
+          });
+          const contentType = imageRes.headers['content-type'];
+          
+          return new Response(imageRes.data, {
+            headers: {
+              'Access-Control-Allow-Origin': '*',
+              'Content-Type': contentType,
+            },
+          });
+        }
+        
+        // Look for any image in the page
+        const imgMatch = html.match(/<img[^>]*src=["']([^"']+)["'][^>]*>/i);
+        if (imgMatch) {
+          let imageUrl = imgMatch[1];
+          if (imageUrl.startsWith('//')) {
+            imageUrl = 'https:' + imageUrl;
+          } else if (imageUrl.startsWith('/')) {
+            const urlObj = new URL(targetUrl);
+            imageUrl = urlObj.origin + imageUrl;
+          } else if (!imageUrl.startsWith('http')) {
+            const urlObj = new URL(targetUrl);
+            imageUrl = urlObj.origin + '/' + imageUrl;
+          }
+          
+          console.log(`[Proxy] Found page image: ${imageUrl}`);
+          
+          try {
+            const imageRes = await axios.get(imageUrl, { 
+              responseType: 'arraybuffer',
+              timeout: 5000,
+            });
+            const contentType = imageRes.headers['content-type'];
+            
+            return new Response(imageRes.data, {
+              headers: {
+                'Access-Control-Allow-Origin': '*',
+                'Content-Type': contentType,
+              },
+            });
+          } catch (imageError) {
+            console.log(`[Proxy] Failed to fetch image: ${imageError.message}`);
+          }
+        }
+        
+        return new Response('No image found', { status: 404 });
       } catch (error) {
         console.error('[Proxy] Error:', error.message);
         return new Response('Error fetching preview', { status: 500 });
@@ -64,4 +127,4 @@ Bun.serve({
   },
 });
 
-console.log('[Proxy] Server running at http://localhost:3001'); 
+console.log('[Proxy] Server running at http://localhost:3002'); 

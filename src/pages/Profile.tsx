@@ -106,8 +106,8 @@ const Profile: React.FC = () => {
     };
   }, [user, getUserTrails, saveUserTrail]);
 
-  const publishedTrails = trails.filter(trail => trail.status === 'published');
-  const draftTrails = trails.filter(trail => trail.status === 'draft');
+  const publishedTrails = trails.filter(trail => (trail as any).status === 'published' || (trail as any).is_published);
+  const draftTrails = trails.filter(trail => (trail as any).status === 'draft' || !(trail as any).is_published);
 
   const formatDate = (dateString: string) => {
     return new Date(dateString).toLocaleDateString('en-US', {
@@ -132,19 +132,17 @@ const Profile: React.FC = () => {
         const updatedDraft = { 
           ...trailToArchive, 
           status: 'draft' as const, 
+          is_published: false,
           shareableLink: undefined 
         };
         await saveUserTrail(updatedDraft, 'draft');
 
-        // Update local state to reflect the change - remove from published, add to drafts
-        setTrails(prev => {
-          // Remove the trail from the current list
-          const filteredTrails = prev.filter(trail => trail.id !== trailToArchive.id);
-          // Add the updated draft version
-          return [...filteredTrails, updatedDraft].sort((a, b) => 
-            new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
-          );
-        });
+        // Force reload trails by triggering the useEffect
+        const { drafts, published } = await getUserTrails();
+        const allTrails = [...drafts, ...published].sort((a, b) => 
+          new Date((b as any).createdAt || (b as any).created_at).getTime() - new Date((a as any).createdAt || (a as any).created_at).getTime()
+        );
+        setTrails(allTrails as any);
 
         toast.success('Trail moved to drafts');
       } catch (error) {
@@ -401,8 +399,9 @@ const Profile: React.FC = () => {
       
       try {
         const userTrails = await getUserTrails();
-        // If 'active' is not a property of Trail, just use all drafts
-        setSavedTrails(userTrails.drafts);
+        // Saved trails should be published trails that users have saved/bookmarked
+        // For now, we'll show an empty list since we don't have a saved/bookmarked system yet
+        setSavedTrails([]);
       } catch (error) {
         console.error('Error loading saved trails:', error);
         setSavedTrails([]);

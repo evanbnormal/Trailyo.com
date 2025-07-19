@@ -33,7 +33,7 @@ interface TrailStep {
 }
 
 // Use process.env for Next.js public env variables
-const PROXY_BASE_URL = process.env.NEXT_PUBLIC_PROXY_BASE_URL || 'http://localhost:3001';
+const PROXY_BASE_URL = process.env.NEXT_PUBLIC_PROXY_BASE_URL || 'http://localhost:3002';
 
 const RewardGlow = () => {
   const isPresent = useIsPresent();
@@ -170,14 +170,18 @@ const ContentPreview = ({
       // Default fallback UI with your logo
       const fallbackUi = (
         <div className="w-full h-full bg-gray-200 flex flex-col items-center justify-center p-4">
-          <img src="/Asset 10newest.png" alt="Default thumbnail" className="w-full h-full object-contain" />
+          <img src="/Asset 10newest.png" alt="Default thumbnail" className="w-16 h-16 mb-2 object-contain" />
+          <p className="text-sm text-gray-600 text-center">
+            {isValidUrl(debouncedUrl) ? 'Click the edit button to upload a custom thumbnail' : 'Enter a URL or upload a thumbnail'}
+          </p>
         </div>
       );
 
       if (isValidUrl(debouncedUrl) && !getYouTubeVideoId(debouncedUrl) && !thumbnailUrl) {
+        // Try to fetch thumbnail from the URL
         const fetchPromise = async () => {
           const response = await fetch(`${PROXY_BASE_URL}/proxy?url=${encodeURIComponent(debouncedUrl)}`);
-          if (!response.ok) throw new Error('Proxy fetch failed');
+          if (!response.ok) throw new Error('Failed to fetch preview');
           const blob = await response.blob();
           if (!blob.type.startsWith('image/')) {
             throw new Error('Fetched content is not an image');
@@ -194,26 +198,26 @@ const ContentPreview = ({
           return base64Url;
         };
 
-        const loadingToast = toast.loading('Fetching website thumbnail...');
-        fetchPromise()
-          .then((base64Url) => {
-            if (!isCancelled) {
-              onThumbnailUpdate(base64Url);
-            }
-            toast.dismiss(loadingToast);
-            toast.success('Thumbnail fetched!', { duration: 2000 });
-          })
-          .catch((err) => {
-            if (!isCancelled) {
-              console.error("Failed to fetch preview:", err);
-              setPreview(fallbackUi);
-            }
-            toast.dismiss(loadingToast);
-            // Only show one error toast at a time
-            if (!errorToastId.current) {
-              errorToastId.current = String(toast.error('Could not fetch thumbnail.', { duration: 2000 }));
-            }
-          });
+        try {
+          const result = await fetchPromise();
+          if (!isCancelled) {
+            onThumbnailUpdate(result);
+            setPreview(
+              <img 
+                src={result} 
+                alt="Website preview" 
+                className="w-full h-full object-cover rounded-md"
+              />
+            );
+            setIsLoading(false);
+          }
+        } catch (error) {
+          console.error('Error fetching preview:', error);
+          if (!isCancelled) {
+            setPreview(fallbackUi);
+            setIsLoading(false);
+          }
+        }
       } else {
         if (!isCancelled) {
           setPreview(fallbackUi);
@@ -1388,11 +1392,12 @@ const CreatorView: React.FC = () => {
           width={width}
           height={height}
           recycle={false}
-          numberOfPieces={400}
-          gravity={0.3}
-          friction={0.99}
+          numberOfPieces={200}
+          gravity={1.2}
+          friction={0.85}
           wind={0.05}
-          opacity={0.8}
+          opacity={0.9}
+          tweenDuration={1500}
           onConfettiComplete={() => setPlayConfetti(false)}
           style={{ position: 'fixed', top: 0, left: 0, zIndex: 1000 }}
         />

@@ -10,6 +10,14 @@ const nextConfig = {
   images: {
     domains: ['images.unsplash.com', 'api.microlink.io'],
   },
+  async rewrites() {
+    return [
+      {
+        source: '/trail/:path*',
+        destination: '/',
+      },
+    ];
+  },
 }
 
 export default nextConfig 

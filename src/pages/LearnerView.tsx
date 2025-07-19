@@ -740,7 +740,7 @@ const LearnerView: React.FC = () => {
 
           {/* Tip CTA - Front and Centre */}
           <div className="bg-white rounded-xl shadow-lg border border-gray-200 p-8 mb-8">
-            <div className="flex items-center justify-center mb-8">
+            <div className="flex items-center justify-center mb-4">
               <div className="w-16 h-16 bg-gradient-to-br from-yellow-400 to-amber-500 rounded-full flex items-center justify-center mr-4">
                 <Gift className="h-8 w-8 text-white" />
               </div>
@@ -750,10 +750,6 @@ const LearnerView: React.FC = () => {
             </div>
 
             <div className="text-center mb-6">
-              <p className="text-xs text-gray-400 mb-4">
-                (Only {tipPercentage}% of Trail Value)
-              </p>
-              
               <div className="flex flex-col gap-3 items-center">
                 <div className="relative w-80">
                   <span className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-500 text-lg">$</span>
@@ -768,7 +764,7 @@ const LearnerView: React.FC = () => {
                 </div>
                 
                 <Button 
-                  className="bg-gradient-to-r from-yellow-500 to-amber-600 text-white hover:from-yellow-600 hover:to-amber-700 px-8 py-3 text-lg font-semibold shadow-lg w-80"
+                  className="bg-gradient-to-r from-yellow-500 to-amber-600 text-white hover:from-yellow-600 hover:to-amber-700 px-8 py-3 text-lg font-semibold shadow-lg w-80 flex items-center justify-center"
                   onClick={() => {
                     const finalTipAmount = tipAmount || trail?.suggestedInvestment || 25;
                     
@@ -783,7 +779,12 @@ const LearnerView: React.FC = () => {
                   }}
                 >
                   <Gift className="h-5 w-5 mr-2" />
-                  Tip ${tipAmount || trail?.suggestedInvestment || 25}
+                  <span>Tip ${tipAmount || 0}</span>
+                  {trail?.trailValue && (
+                    <span className="ml-2 text-white line-through text-sm opacity-70">
+                      ${trail.trailValue}
+                    </span>
+                  )}
                 </Button>
               </div>
             </div>
@@ -816,11 +817,12 @@ const LearnerView: React.FC = () => {
           width={width}
           height={height}
           recycle={false}
-          numberOfPieces={400}
-          gravity={0.5}
-          friction={0.95}
-          wind={0.02}
-          opacity={0.8}
+          numberOfPieces={200}
+          gravity={1.2}
+          friction={0.85}
+          wind={0.05}
+          opacity={0.9}
+          tweenDuration={1500}
           onConfettiComplete={() => setPlayConfetti(false)}
           style={{ position: 'fixed', top: 0, left: 0, zIndex: 1000 }}
         />
