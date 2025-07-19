@@ -14,6 +14,7 @@ import TrailProgress from '@/components/TrailProgress';
 import Confetti from 'react-confetti';
 import { useWindowSize } from 'react-use';
 import { analyticsService } from '@/lib/analytics';
+import { StripePayment } from '@/components/StripePayment';
 
 interface TrailStep {
   id: string;
@@ -63,6 +64,9 @@ const LearnerView: React.FC = () => {
   const [trailLoaded, setTrailLoaded] = useState(false);
   const [tipAmount, setTipAmount] = useState(25); // Move tipAmount state to top level
   const [tipCompleted, setTipCompleted] = useState(false); // Track if user has tipped or skipped
+  const [showStripePayment, setShowStripePayment] = useState(false);
+  const [skipPaymentAmount, setSkipPaymentAmount] = useState(0);
+  const [skipPaymentTarget, setSkipPaymentTarget] = useState<number | null>(null);
   
   // Video tracking
   const [videoWatchTime, setVideoWatchTime] = useState<Record<number, number>>({});
@@ -1342,7 +1346,15 @@ const LearnerView: React.FC = () => {
             <Button variant="outline" onClick={() => setShowSkipDialog(false)}>
               Cancel
             </Button>
-            <Button onClick={handleSkipStep} className="bg-black text-white">
+            <Button onClick={() => {
+              if (skipToStep !== null && trail && trail.trailValue && trail.steps) {
+                const cost = Math.round(trail.trailValue / trail.steps.length);
+                setSkipPaymentAmount(cost);
+                setSkipPaymentTarget(skipToStep);
+                setShowStripePayment(true);
+                setShowSkipDialog(false);
+              }
+            }} className="bg-black text-white">
               Skip for ${skipToStep !== null && trail && trail.trailValue && trail.steps ? Math.round(trail.trailValue / trail.steps.length) : 0}
             </Button>
           </div>
@@ -1380,27 +1392,77 @@ const LearnerView: React.FC = () => {
               Cancel
             </Button>
             <Button onClick={() => {
-              if (skipTargetStep !== null) {
-                // Mark all steps up to and including skipTargetStep as completed
-                const newCompletedSteps = new Set(completedSteps);
-                for (let i = progressStepIndex + 1; i <= skipTargetStep; i++) {
-                  newCompletedSteps.add(i);
-                }
-                setCompletedSteps(newCompletedSteps);
-                
-                // Check if the target step is a reward step and trigger confetti
-                const targetStep = trail.steps[skipTargetStep];
-                if (targetStep?.type === 'reward') {
-                  setPlayConfetti(true);
-                }
-                
-                setCurrentStepIndex(skipTargetStep);
-                setProgressStepIndex(skipTargetStep);
+              if (skipTargetStep !== null && trail && trail.trailValue && trail.steps) {
+                const cost = Math.round((trail.trailValue / trail.steps.length) * (skipTargetStep - progressStepIndex));
+                setSkipPaymentAmount(cost);
+                setSkipPaymentTarget(skipTargetStep);
+                setShowStripePayment(true);
+                setShowSkipToStepDialog(false);
               }
-              setShowSkipToStepDialog(false);
             }} className="bg-black text-white">
               Skip for ${skipTargetStep !== null && trail && trail.trailValue && trail.steps ? Math.round((trail.trailValue / trail.steps.length) * (skipTargetStep - progressStepIndex)) : 0}
             </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Stripe Payment Modal for Skip */}
+      <Dialog open={showStripePayment} onOpenChange={setShowStripePayment}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle className="text-2xl font-bold">
+              Skip to Step {skipPaymentTarget !== null ? skipPaymentTarget + 1 : ''}
+            </DialogTitle>
+            <DialogDescription>
+              Complete payment to skip to this step and unlock all content in between.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="py-4">
+            <StripePayment
+              amount={skipPaymentAmount}
+              trailId={trail?.id || 'skip-payment'}
+              creatorId={trail?.creator || 'unknown'}
+              onSuccess={() => {
+                if (skipPaymentTarget !== null && trail) {
+                  // Mark all steps up to and including skipPaymentTarget as completed
+                  const newCompletedSteps = new Set(completedSteps);
+                  for (let i = progressStepIndex + 1; i <= skipPaymentTarget; i++) {
+                    newCompletedSteps.add(i);
+                  }
+                  setCompletedSteps(newCompletedSteps);
+                  
+                  // Check if the target step is a reward step and trigger confetti
+                  const targetStep = trail.steps[skipPaymentTarget];
+                  if (targetStep?.type === 'reward') {
+                    setPlayConfetti(true);
+                  }
+                  
+                  setCurrentStepIndex(skipPaymentTarget);
+                  setProgressStepIndex(skipPaymentTarget);
+                  
+                  // Track skip payment
+                  analyticsService.trackTipDonated(trail.id, skipPaymentAmount);
+                }
+                
+                toast({
+                  title: "Payment successful!",
+                  description: `You've skipped to step ${skipPaymentTarget !== null ? skipPaymentTarget + 1 : ''}.`,
+                });
+                
+                setShowStripePayment(false);
+                setSkipPaymentAmount(0);
+                setSkipPaymentTarget(null);
+              }}
+              onCancel={() => {
+                toast({
+                  title: "Payment cancelled",
+                  description: "You can try again anytime.",
+                });
+                setShowStripePayment(false);
+                setSkipPaymentAmount(0);
+                setSkipPaymentTarget(null);
+              }}
+            />
           </div>
         </DialogContent>
       </Dialog>
