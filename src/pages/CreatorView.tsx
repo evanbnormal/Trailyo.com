@@ -18,6 +18,8 @@ import { useNavigate } from 'react-router-dom';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useAuth } from '@/contexts/AuthContext';
 import LoginModal from '@/components/LoginModal';
+import SubscriptionModal from '@/components/SubscriptionModal';
+import { useSubscription } from '@/hooks/useSubscription';
 
 interface TrailStep {
   id: string;
@@ -904,7 +906,9 @@ const CreatorView: React.FC = () => {
   const [showPublishValidationDialog, setShowPublishValidationDialog] = useState(false);
   const [showUnsavedStepsDialog, setShowUnsavedStepsDialog] = useState(false);
   const [showLoginModal, setShowLoginModal] = useState(false);
+  const [showSubscriptionModal, setShowSubscriptionModal] = useState(false);
   const { isAuthenticated, saveUserTrail, deleteUserTrail } = useAuth();
+  const { canCreateTrails, startSubscription, subscriptionStatus } = useSubscription();
 
   // Currency options
   const currencies = [
@@ -1404,6 +1408,25 @@ const CreatorView: React.FC = () => {
     }
   };
 
+  const checkSubscriptionBeforeAction = (action: () => void) => {
+    if (!isAuthenticated) {
+      setShowLoginModal(true);
+      return;
+    }
+
+    if (!canCreateTrails()) {
+      setShowSubscriptionModal(true);
+      return;
+    }
+
+    action();
+  };
+
+  const handleSubscriptionSuccess = () => {
+    setShowSubscriptionModal(false);
+    // The user can now create trails
+  };
+
   console.log('[Debug] CreatorView rendering with index:', currentStepIndex);
 
   return (
@@ -1477,7 +1500,7 @@ const CreatorView: React.FC = () => {
               <Button 
                 variant="outline" 
                 className="bg-gray-100"
-                onClick={handleSaveAsDraft}
+                onClick={() => checkSubscriptionBeforeAction(handleSaveAsDraft)}
               >
                 {editingTrailId ? 'Save Changes' : 'Save as Draft'}
               </Button>
@@ -1488,7 +1511,7 @@ const CreatorView: React.FC = () => {
                     ? "bg-black hover:bg-black/90" 
                     : "bg-gray-400 cursor-not-allowed"
                 )}
-                onClick={handlePublishWithValidation}
+                onClick={() => checkSubscriptionBeforeAction(handlePublishWithValidation)}
                 disabled={!canPublish()}
               >
                 Publish Trail
@@ -1546,6 +1569,13 @@ const CreatorView: React.FC = () => {
         isOpen={showLoginModal} 
         onClose={() => setShowLoginModal(false)}
         onSuccess={handleLoginSuccess}
+      />
+
+      {/* Subscription Modal */}
+      <SubscriptionModal
+        open={showSubscriptionModal}
+        onOpenChange={setShowSubscriptionModal}
+        onSubscribe={startSubscription}
       />
     </>
   );
