@@ -70,6 +70,27 @@
   .trail-line-active {
     @apply bg-black;
   }
+
+  /* 3D Card Flip Styles */
+  .perspective-1000 {
+    perspective: 1000px;
+  }
+
+  .rotate-y-0 {
+    transform: rotateY(0deg);
+  }
+
+  .rotate-y-180 {
+    transform: rotateY(180deg);
+  }
+
+  .translate-z-0 {
+    transform: translateZ(0px);
+  }
+
+  .translate-z-\[-20px\] {
+    transform: translateZ(-20px);
+  }
 }
 
 @keyframes shimmer {
