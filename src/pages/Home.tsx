@@ -6,11 +6,10 @@ import { Button } from '@/components/ui/button';
 import { Plus } from 'lucide-react';
 import LoginModal from '@/components/LoginModal';
 import { useAuth } from '@/contexts/AuthContext';
-import { useSearchParams } from 'next/navigation';
 
 const Home: React.FC = () => {
   const [showLoginModal, setShowLoginModal] = useState(false);
-  const { isAuthenticated } = useAuth();
+  const { isAuthenticated, login } = useAuth();
   const navigate = useNavigate();
   const searchParams = typeof window !== 'undefined' ? new URLSearchParams(window.location.search) : null;
 
@@ -23,16 +22,41 @@ const Home: React.FC = () => {
       window.history.replaceState({}, '', url.pathname + url.search);
     }
     
-    // Handle email confirmation success
+    // Handle email confirmation success and auto-login
     if (searchParams && searchParams.get('confirmed') === 'true') {
-      // Show success message
-      alert('Email confirmed successfully! You can now sign in.');
-      // Remove the param from the URL
+      const email = searchParams.get('email');
+      const autoLogin = searchParams.get('autoLogin');
+      
+      if (email && autoLogin === 'true') {
+        // Auto-login the user
+        handleAutoLogin(email);
+      } else {
+        // Show success message for manual confirmation
+        alert('Email confirmed successfully! You can now sign in.');
+      }
+      
+      // Remove the params from the URL
       const url = new URL(window.location.href);
       url.searchParams.delete('confirmed');
+      url.searchParams.delete('email');
+      url.searchParams.delete('autoLogin');
       window.history.replaceState({}, '', url.pathname + url.search);
     }
   }, []);
+
+  const handleAutoLogin = async (email: string) => {
+    try {
+      // For auto-login after email confirmation, we'll need to implement
+      // a way to get the user's password or use a temporary token
+      // For now, we'll show a success message and prompt them to login
+      alert(`Email confirmed successfully! Welcome to Trailyo, ${email}. Please sign in to continue.`);
+      setShowLoginModal(true);
+    } catch (error) {
+      console.error('Auto-login error:', error);
+      alert('Email confirmed successfully! Please sign in to continue.');
+      setShowLoginModal(true);
+    }
+  };
 
   const handleCreateTrail = () => {
     if (isAuthenticated) {
