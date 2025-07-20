@@ -64,14 +64,14 @@ const SubscriptionModal: React.FC<SubscriptionModalProps> = ({
             <div 
               className={`absolute inset-0 transition-all duration-500 ease-in-out transform ${
                 activeCard === 'creator' 
-                  ? 'rotate-y-0 translate-z-0 scale-100 opacity-100' 
-                  : 'rotate-y-180 translate-z-[-20px] scale-95 opacity-60'
+                  ? 'rotate-y-0 translate-z-0 scale-100 opacity-100 z-20' 
+                  : 'rotate-y-0 translate-z-[-10px] scale-95 opacity-80 z-10'
               }`}
               style={{
                 transformStyle: 'preserve-3d',
                 transform: activeCard === 'creator' 
                   ? 'rotateY(0deg) translateZ(0px) scale(1)' 
-                  : 'rotateY(180deg) translateZ(-20px) scale(0.95)'
+                  : 'rotateY(0deg) translateZ(-10px) scale(0.95)'
               }}
             >
               <div className="w-full h-full border-2 border-yellow-200 bg-gradient-to-br from-yellow-50 to-amber-50 rounded-xl p-6 cursor-pointer"
@@ -131,14 +131,14 @@ const SubscriptionModal: React.FC<SubscriptionModalProps> = ({
             <div 
               className={`absolute inset-0 transition-all duration-500 ease-in-out transform ${
                 activeCard === 'free' 
-                  ? 'rotate-y-0 translate-z-0 scale-100 opacity-100' 
-                  : 'rotate-y-180 translate-z-[-20px] scale-95 opacity-60'
+                  ? 'rotate-y-0 translate-z-0 scale-100 opacity-100 z-20' 
+                  : 'rotate-y-0 translate-z-[-10px] scale-95 opacity-80 z-10'
               }`}
               style={{
                 transformStyle: 'preserve-3d',
                 transform: activeCard === 'free' 
                   ? 'rotateY(0deg) translateZ(0px) scale(1)' 
-                  : 'rotateY(180deg) translateZ(-20px) scale(0.95)'
+                  : 'rotateY(0deg) translateZ(-10px) scale(0.95)'
               }}
             >
               <div className="w-full h-full border border-gray-200 bg-white rounded-xl p-6 cursor-pointer"
