@@ -17,44 +17,17 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    // Get customer by user ID (you might want to store this mapping in your database)
-    const customers = await stripe.customers.list({
-      limit: 1,
-    });
-
-    if (customers.data.length === 0) {
-      return NextResponse.json({
-        isSubscribed: false,
-        isTrialing: false,
-        status: 'inactive',
-      });
-    }
-
-    const customer = customers.data[0];
-
-    // Get active subscriptions
-    const subscriptions = await stripe.subscriptions.list({
-      customer: customer.id,
-      status: 'active',
-      limit: 1,
-    });
-
-    if (subscriptions.data.length === 0) {
-      return NextResponse.json({
-        isSubscribed: false,
-        isTrialing: false,
-        status: 'inactive',
-      });
-    }
-
-    const subscription = subscriptions.data[0];
-
+    // For now, we'll assume new users don't have subscriptions
+    // In a real implementation, you'd store the Stripe customer ID in your user database
+    // and look it up by user ID. For now, we'll return free tier for all users.
+    
+    // TODO: Implement proper customer lookup by user ID
+    // This would require storing Stripe customer IDs in your user database
+    
     return NextResponse.json({
-      isSubscribed: true,
-      isTrialing: subscription.status === 'trialing',
-      trialEnd: subscription.trial_end,
-      currentPeriodEnd: (subscription as any).current_period_end,
-      status: subscription.status,
+      isSubscribed: false,
+      isTrialing: false,
+      status: 'inactive',
     });
   } catch (error) {
     console.error('Get subscription status error:', error);

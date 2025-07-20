@@ -16,7 +16,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Check if customer already exists
+    // Check if customer already exists by email
     const existingCustomers = await stripe.customers.list({
       email: email,
       limit: 1,
@@ -33,6 +33,8 @@ export async function POST(request: NextRequest) {
         email: email,
         metadata: {
           source: 'trailyo_creator_subscription',
+          // TODO: Add user ID to metadata when you have user authentication
+          // userId: userId,
         },
       });
       customerId = customer.id;

@@ -60,6 +60,7 @@ export class SubscriptionService {
       return await response.json();
     } catch (error) {
       console.error('Get subscription status error:', error);
+      // Default to free tier for new users
       return {
         isSubscribed: false,
         isTrialing: false,
