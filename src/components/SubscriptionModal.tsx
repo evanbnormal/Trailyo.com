@@ -17,6 +17,7 @@ const SubscriptionModal: React.FC<SubscriptionModalProps> = ({
 }) => {
   const [isLoading, setIsLoading] = useState(false);
   const [activeCard, setActiveCard] = useState<'creator' | 'free'>('creator');
+  const [isAnimating, setIsAnimating] = useState(false);
 
   const handleSubscribe = async () => {
     setIsLoading(true);
@@ -27,6 +28,13 @@ const SubscriptionModal: React.FC<SubscriptionModalProps> = ({
     } finally {
       setIsLoading(false);
     }
+  };
+
+  const handleCardSwitch = (newCard: 'creator' | 'free') => {
+    if (isAnimating || activeCard === newCard) return;
+    setIsAnimating(true);
+    setActiveCard(newCard);
+    setTimeout(() => setIsAnimating(false), 500);
   };
 
   return (
@@ -58,11 +66,14 @@ const SubscriptionModal: React.FC<SubscriptionModalProps> = ({
 
         <div className="space-y-4 mb-6">
           {/* Collapsed Free Tier Card (when Creator is active) */}
-          {activeCard === 'creator' && (
-            <div 
-              className="border border-gray-200 bg-white rounded-xl p-4 cursor-pointer transition-all duration-300 hover:shadow-md"
-              onClick={() => setActiveCard('free')}
-            >
+          <div 
+            className={`border border-gray-200 bg-white rounded-xl p-4 cursor-pointer transition-all duration-500 ease-in-out hover:shadow-md ${
+              activeCard === 'creator' 
+                ? 'opacity-100 transform translate-y-0 max-h-24' 
+                : 'opacity-0 transform -translate-y-4 max-h-0 overflow-hidden'
+            }`}
+            onClick={() => handleCardSwitch('free')}
+          >
               <div className="flex items-center justify-between">
                 <div className="flex items-center">
                   <div className="bg-gray-100 p-2 rounded-full mr-3">
@@ -82,69 +93,74 @@ const SubscriptionModal: React.FC<SubscriptionModalProps> = ({
           )}
 
           {/* Full Creator Card */}
-          {activeCard === 'creator' && (
-            <div className="border-2 border-yellow-200 bg-gradient-to-br from-yellow-50 to-amber-50 rounded-xl p-6">
-              <div className="flex items-center justify-between mb-4">
-                <div className="flex items-center">
-                  <div className="bg-gradient-to-r from-yellow-500 to-amber-600 p-2 rounded-full mr-3">
-                    <Crown className="h-6 w-6 text-white" />
-                  </div>
-                  <div>
-                    <h4 className="text-2xl font-bold text-gray-900">Creator</h4>
-                    <p className="text-sm text-gray-600">Everything + trail creation</p>
-                  </div>
+          <div className={`border-2 border-yellow-200 bg-gradient-to-br from-yellow-50 to-amber-50 rounded-xl p-6 transition-all duration-500 ease-in-out ${
+            activeCard === 'creator' 
+              ? 'opacity-100 transform translate-y-0' 
+              : 'opacity-0 transform translate-y-4'
+          }`}>
+            <div className="flex items-center justify-between mb-4">
+              <div className="flex items-center">
+                <div className="bg-gradient-to-r from-yellow-500 to-amber-600 p-2 rounded-full mr-3">
+                  <Crown className="h-6 w-6 text-white" />
                 </div>
-                <div className="text-right">
-                  <div className="text-3xl font-bold text-gray-900">$29.99</div>
-                  <div className="text-gray-600">per month</div>
-                  <Badge variant="secondary" className="bg-yellow-100 text-yellow-800 mt-1">
-                    <Star className="h-3 w-3 mr-1" />
-                    Most Popular
-                  </Badge>
+                <div>
+                  <h4 className="text-2xl font-bold text-gray-900">Creator</h4>
+                  <p className="text-sm text-gray-600">Everything + trail creation</p>
                 </div>
               </div>
-              
-              <div className="bg-white rounded-lg p-4 mb-4">
-                <div className="flex items-center justify-center text-green-600 font-semibold mb-2">
-                  <Zap className="h-4 w-4 mr-2" />
-                  14-Day Free Trial
-                </div>
-                <p className="text-sm text-gray-600 text-center">
-                  Free trial • Cancel anytime
-                </p>
-              </div>
-              
-              <div className="space-y-2">
-                <div className="flex items-center">
-                  <Check className="h-4 w-4 text-yellow-500 mr-3 flex-shrink-0" />
-                  <span className="text-sm text-gray-700">Create unlimited trails</span>
-                </div>
-                <div className="flex items-center">
-                  <Check className="h-4 w-4 text-yellow-500 mr-3 flex-shrink-0" />
-                  <span className="text-sm text-gray-700">Publish and share with the world</span>
-                </div>
-                <div className="flex items-center">
-                  <Check className="h-4 w-4 text-yellow-500 mr-3 flex-shrink-0" />
-                  <span className="text-sm text-gray-700">Advanced analytics and insights</span>
-                </div>
-                <div className="flex items-center">
-                  <Check className="h-4 w-4 text-yellow-500 mr-3 flex-shrink-0" />
-                  <span className="text-sm text-gray-700">Priority support</span>
-                </div>
-                <div className="flex items-center">
-                  <Check className="h-4 w-4 text-yellow-500 mr-3 flex-shrink-0" />
-                  <span className="text-sm text-gray-700">Early access to new features</span>
-                </div>
+              <div className="text-right">
+                <div className="text-3xl font-bold text-gray-900">$29.99</div>
+                <div className="text-gray-600">per month</div>
+                <Badge variant="secondary" className="bg-yellow-100 text-yellow-800 mt-1">
+                  <Star className="h-3 w-3 mr-1" />
+                  Most Popular
+                </Badge>
               </div>
             </div>
-          )}
+            
+            <div className="bg-white rounded-lg p-4 mb-4">
+              <div className="flex items-center justify-center text-yellow-600 font-semibold mb-2">
+                <Zap className="h-4 w-4 mr-2" />
+                14-Day Free Trial
+              </div>
+              <p className="text-sm text-gray-400 text-center">
+                Free trial • Cancel anytime
+              </p>
+            </div>
+            
+            <div className="space-y-2">
+              <div className="flex items-center">
+                <Check className="h-4 w-4 text-yellow-500 mr-3 flex-shrink-0" />
+                <span className="text-sm text-gray-700">Create unlimited trails</span>
+              </div>
+              <div className="flex items-center">
+                <Check className="h-4 w-4 text-yellow-500 mr-3 flex-shrink-0" />
+                <span className="text-sm text-gray-700">Publish and share with the world</span>
+              </div>
+              <div className="flex items-center">
+                <Check className="h-4 w-4 text-yellow-500 mr-3 flex-shrink-0" />
+                <span className="text-sm text-gray-700">Advanced analytics and insights</span>
+              </div>
+              <div className="flex items-center">
+                <Check className="h-4 w-4 text-yellow-500 mr-3 flex-shrink-0" />
+                <span className="text-sm text-gray-700">Priority support</span>
+              </div>
+              <div className="flex items-center">
+                <Check className="h-4 w-4 text-yellow-500 mr-3 flex-shrink-0" />
+                <span className="text-sm text-gray-700">Early access to new features</span>
+              </div>
+            </div>
+          </div>
 
           {/* Collapsed Creator Card (when Free Tier is active) */}
-          {activeCard === 'free' && (
-            <div 
-              className="border-2 border-yellow-200 bg-gradient-to-br from-yellow-50 to-amber-50 rounded-xl p-4 cursor-pointer transition-all duration-300 hover:shadow-md"
-              onClick={() => setActiveCard('creator')}
-            >
+          <div 
+            className={`border-2 border-yellow-200 bg-gradient-to-br from-yellow-50 to-amber-50 rounded-xl p-4 cursor-pointer transition-all duration-500 ease-in-out hover:shadow-md ${
+              activeCard === 'free' 
+                ? 'opacity-100 transform translate-y-0 max-h-24' 
+                : 'opacity-0 transform -translate-y-4 max-h-0 overflow-hidden'
+            }`}
+            onClick={() => handleCardSwitch('creator')}
+          >
               <div className="flex items-center justify-between">
                 <div className="flex items-center">
                   <div className="bg-gradient-to-r from-yellow-500 to-amber-600 p-2 rounded-full mr-3">
@@ -168,8 +184,11 @@ const SubscriptionModal: React.FC<SubscriptionModalProps> = ({
           )}
 
           {/* Full Free Tier Card */}
-          {activeCard === 'free' && (
-            <div className="border border-gray-200 bg-white rounded-xl p-6">
+          <div className={`border border-gray-200 bg-white rounded-xl p-6 transition-all duration-500 ease-in-out ${
+            activeCard === 'free' 
+              ? 'opacity-100 transform translate-y-0' 
+              : 'opacity-0 transform translate-y-4'
+          }`}>
               <div className="flex items-center justify-between mb-4">
                 <div className="flex items-center">
                   <div className="bg-gray-100 p-2 rounded-full mr-3">
@@ -206,21 +225,20 @@ const SubscriptionModal: React.FC<SubscriptionModalProps> = ({
                   <Check className="h-4 w-4 text-gray-400 mr-3 flex-shrink-0" />
                   <span className="text-sm text-gray-700">Basic support</span>
                 </div>
-                <div className="flex items-center">
-                  <X className="h-4 w-4 text-gray-400 mr-3 flex-shrink-0" />
-                  <span className="text-sm text-gray-500">Create trails</span>
-                </div>
-                <div className="flex items-center">
-                  <X className="h-4 w-4 text-gray-400 mr-3 flex-shrink-0" />
-                  <span className="text-sm text-gray-500">Publish trails</span>
-                </div>
-                <div className="flex items-center">
-                  <X className="h-4 w-4 text-gray-400 mr-3 flex-shrink-0" />
-                  <span className="text-sm text-gray-500">Advanced analytics</span>
-                </div>
+                                  <div className="flex items-center">
+                    <X className="h-4 w-4 text-red-500 mr-3 flex-shrink-0" />
+                    <span className="text-sm text-gray-500">Create trails</span>
+                  </div>
+                  <div className="flex items-center">
+                    <X className="h-4 w-4 text-red-500 mr-3 flex-shrink-0" />
+                    <span className="text-sm text-gray-500">Publish trails</span>
+                  </div>
+                  <div className="flex items-center">
+                    <X className="h-4 w-4 text-red-500 mr-3 flex-shrink-0" />
+                    <span className="text-sm text-gray-500">Advanced analytics</span>
+                  </div>
               </div>
             </div>
-          )}
         </div>
 
         {/* Action Buttons */}
