@@ -398,10 +398,16 @@ const Profile: React.FC = () => {
       }
       
       try {
-        const userTrails = await getUserTrails();
-        // Saved trails should be published trails that users have saved/bookmarked
-        // For now, we'll show an empty list since we don't have a saved/bookmarked system yet
-        setSavedTrails([]);
+        // Load saved trails from localStorage
+        const savedTrailsData = localStorage.getItem(`user_${user.id}_saved`);
+        if (savedTrailsData) {
+          const parsedTrails = JSON.parse(savedTrailsData);
+          // Filter for trails with active: true (trails user is actively learning)
+          const activeTrails = parsedTrails.filter((trail: any) => trail.active === true);
+          setSavedTrails(activeTrails);
+        } else {
+          setSavedTrails([]);
+        }
       } catch (error) {
         console.error('Error loading saved trails:', error);
         setSavedTrails([]);
@@ -409,7 +415,17 @@ const Profile: React.FC = () => {
     };
 
     loadSavedTrails();
-  }, [user, getUserTrails]);
+
+    // Add storage event listener to detect when saved trails change
+    const handleStorageChange = (e: StorageEvent) => {
+      if (e.key && e.key.includes('_saved')) {
+        loadSavedTrails();
+      }
+    };
+
+    window.addEventListener('storage', handleStorageChange);
+    return () => window.removeEventListener('storage', handleStorageChange);
+  }, [user]);
 
   return (
     <div className="min-h-screen bg-gray-50 py-8">
@@ -447,7 +463,7 @@ const Profile: React.FC = () => {
                   <span className="text-gray-500 text-lg font-medium">No saved trails</span>
                 </div>
               ) : (
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-2 gap-6">
                   {savedTrails.map((trail: Trail) => (
                     <SavedTrailCard key={trail.id} trail={trail} onClick={() => window.open(trail.shareableLink || `/learner/${trail.id}`, '_self')} />
                   ))}

@@ -79,36 +79,52 @@ Bun.serve({
         }
         
         // Look for any image in the page
-        const imgMatch = html.match(/<img[^>]*src=["']([^"']+)["'][^>]*>/i);
-        if (imgMatch) {
-          let imageUrl = imgMatch[1];
-          if (imageUrl.startsWith('//')) {
-            imageUrl = 'https:' + imageUrl;
-          } else if (imageUrl.startsWith('/')) {
-            const urlObj = new URL(targetUrl);
-            imageUrl = urlObj.origin + imageUrl;
-          } else if (!imageUrl.startsWith('http')) {
-            const urlObj = new URL(targetUrl);
-            imageUrl = urlObj.origin + '/' + imageUrl;
-          }
-          
-          console.log(`[Proxy] Found page image: ${imageUrl}`);
-          
-          try {
-            const imageRes = await axios.get(imageUrl, { 
-              responseType: 'arraybuffer',
-              timeout: 5000,
-            });
-            const contentType = imageRes.headers['content-type'];
-            
-            return new Response(imageRes.data, {
-              headers: {
-                'Access-Control-Allow-Origin': '*',
-                'Content-Type': contentType,
-              },
-            });
-          } catch (imageError) {
-            console.log(`[Proxy] Failed to fetch image: ${imageError.message}`);
+        const imgMatches = html.match(/<img[^>]*src=["']([^"']+)["'][^>]*>/gi);
+        if (imgMatches) {
+          for (const imgMatch of imgMatches) {
+            const srcMatch = imgMatch.match(/src=["']([^"']+)["']/i);
+            if (srcMatch) {
+              let imageUrl = srcMatch[1];
+              
+              // Skip data URLs and very small images
+              if (imageUrl.startsWith('data:') || imageUrl.includes('icon') || imageUrl.includes('logo')) {
+                continue;
+              }
+              
+              if (imageUrl.startsWith('//')) {
+                imageUrl = 'https:' + imageUrl;
+              } else if (imageUrl.startsWith('/')) {
+                const urlObj = new URL(targetUrl);
+                imageUrl = urlObj.origin + imageUrl;
+              } else if (!imageUrl.startsWith('http')) {
+                const urlObj = new URL(targetUrl);
+                imageUrl = urlObj.origin + '/' + imageUrl;
+              }
+              
+              console.log(`[Proxy] Trying page image: ${imageUrl}`);
+              
+              try {
+                const imageRes = await axios.get(imageUrl, { 
+                  responseType: 'arraybuffer',
+                  timeout: 5000,
+                });
+                const contentType = imageRes.headers['content-type'];
+                
+                // Check if it's actually an image and has reasonable size
+                if (contentType.startsWith('image/') && imageRes.data.length > 1000) {
+                  console.log(`[Proxy] Successfully fetched image: ${imageUrl} (${imageRes.data.length} bytes)`);
+                  
+                  return new Response(imageRes.data, {
+                    headers: {
+                      'Access-Control-Allow-Origin': '*',
+                      'Content-Type': contentType,
+                    },
+                  });
+                }
+              } catch (imageError) {
+                console.log(`[Proxy] Failed to fetch image ${imageUrl}: ${imageError.message}`);
+              }
+            }
           }
         }
         

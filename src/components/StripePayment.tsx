@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { loadStripe } from '@stripe/stripe-js';
 import { Elements, PaymentElement, useStripe, useElements } from '@stripe/react-stripe-js';
 import { Button } from '@/components/ui/button';
-import { Gift, Loader2, X } from 'lucide-react';
+import { Gift, Loader2, X, Check } from 'lucide-react';
 import { toast } from '@/hooks/use-toast';
 
 // Load Stripe outside of component to avoid recreating on every render
@@ -28,6 +28,7 @@ const PaymentForm: React.FC<{
   const elements = useElements();
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [isSuccess, setIsSuccess] = useState(false);
 
   const handleSubmit = async (event: React.FormEvent) => {
     event.preventDefault();
@@ -75,6 +76,7 @@ const PaymentForm: React.FC<{
         confirmParams: {
           return_url: `${window.location.origin}/payment-success`,
         },
+        redirect: 'if_required',
       });
 
       if (confirmError) {
@@ -83,22 +85,47 @@ const PaymentForm: React.FC<{
         return;
       }
 
-      // Payment successful
+      // Payment successful - show success state in modal
+      setIsLoading(false);
+      setError(null);
+      setIsSuccess(true);
+      
+      // Show success message
       toast({
         title: "Payment Successful!",
         description: `You've paid $${amount} to skip this step.`,
       });
-      onSuccess();
+      
+      // Call success callback after a short delay to show the success state
+      setTimeout(() => {
+        onSuccess();
+      }, 1500);
     } catch (err) {
       setError('Payment failed. Please try again.');
       setIsLoading(false);
     }
   };
 
+  // Show success state
+  if (isSuccess) {
+    return (
+      <div className="text-center py-8">
+        <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-4">
+          <Check className="h-8 w-8 text-green-600" />
+        </div>
+        <h3 className="text-xl font-semibold text-gray-900 mb-2">Payment Successful!</h3>
+        <p className="text-gray-600 mb-4">Your payment has been processed successfully.</p>
+        <div className="animate-pulse">
+          <p className="text-sm text-gray-500">Redirecting to your trail...</p>
+        </div>
+      </div>
+    );
+  }
+
   return (
-    <form onSubmit={handleSubmit} className="space-y-6">
-      <div className="space-y-4">
-        <div className="flex items-center justify-between p-4 bg-gray-50 rounded-lg">
+    <form onSubmit={handleSubmit} className="space-y-6 w-full">
+      <div className="space-y-4 sm:space-y-6 w-full">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between p-4 bg-gray-50 rounded-lg space-y-3 sm:space-y-0">
           <div className="flex items-center space-x-3">
             <Gift className="h-5 w-5 text-green-600" />
             <div>
@@ -106,15 +133,17 @@ const PaymentForm: React.FC<{
               <p className="text-sm text-gray-600">Pay to unlock this step</p>
             </div>
           </div>
-          <div className="text-right">
-            <p className="text-2xl font-bold">${amount}</p>
+          <div className="text-center sm:text-right">
+            <p className="text-3xl sm:text-2xl font-bold">${amount}</p>
             <p className="text-sm text-gray-500">USD</p>
           </div>
         </div>
 
-        <div className="space-y-2">
+        <div className="space-y-2 w-full">
           <label className="text-sm font-medium text-gray-700">Payment Details</label>
-          <PaymentElement />
+          <div className="w-full overflow-x-hidden">
+            <PaymentElement />
+          </div>
         </div>
 
         {error && (
@@ -124,7 +153,7 @@ const PaymentForm: React.FC<{
         )}
       </div>
 
-      <div className="flex space-x-3">
+      <div className="flex flex-col sm:flex-row space-y-3 sm:space-y-0 sm:space-x-3">
         <Button
           type="button"
           variant="outline"

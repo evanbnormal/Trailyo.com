@@ -101,6 +101,37 @@ const LearnerView: React.FC = () => {
     setWindowEnd(end);
   }, [currentStepIndex, trail?.steps]);
 
+  // Check for successful payments and unlock steps
+  useEffect(() => {
+    const lastPaymentSuccess = localStorage.getItem('lastPaymentSuccess');
+    if (lastPaymentSuccess) {
+      try {
+        const paymentData = JSON.parse(lastPaymentSuccess);
+        const currentTrailId = localStorage.getItem('currentTrailId');
+        
+        // Check if this payment was for the current trail and is recent (within last 5 minutes)
+        if (currentTrailId === trailId && 
+            paymentData.status === 'succeeded' && 
+            Date.now() - paymentData.timestamp < 5 * 60 * 1000) {
+          
+          // Unlock the next step (or advance progress)
+          setProgressStepIndex(prev => Math.max(prev, 1)); // At least unlock step 1
+          
+          // Clear the payment data
+          localStorage.removeItem('lastPaymentSuccess');
+          
+          toast({
+            title: "Step Unlocked!",
+            description: "Your payment was successful. You can now proceed to the next step.",
+          });
+        }
+      } catch (error) {
+        console.error('Error processing payment success:', error);
+        localStorage.removeItem('lastPaymentSuccess');
+      }
+    }
+  }, [trailId]);
+
   useEffect(() => {
     console.log('LearnerView useEffect running. trailId:', trailId, 'actualTrailId:', actualTrailId);
     let isMounted = true;
@@ -139,6 +170,29 @@ const LearnerView: React.FC = () => {
         console.log('Setting trail:', foundTrail.title);
         setTrail(foundTrail);
         setTrailLoaded(true);
+        
+        // Load saved progress if available
+        if (user) {
+          const savedTrails = JSON.parse(localStorage.getItem(`user_${user.id}_saved`) || '[]');
+          const savedProgress = savedTrails.find((t: any) => t.id === actualTrailId);
+          
+          if (savedProgress) {
+            console.log('Loading saved progress:', savedProgress);
+            // Restore progress state
+            if (savedProgress.currentStepIndex !== undefined) {
+              setCurrentStepIndex(savedProgress.currentStepIndex);
+            }
+            if (savedProgress.progressStepIndex !== undefined) {
+              setProgressStepIndex(savedProgress.progressStepIndex);
+            }
+            if (savedProgress.completedSteps) {
+              setCompletedSteps(new Set(savedProgress.completedSteps));
+            }
+            if (savedProgress.videoWatchTime) {
+              setVideoWatchTime(savedProgress.videoWatchTime);
+            }
+          }
+        }
         
         // Track trail view
         analyticsService.trackTrailView(actualTrailId, foundTrail.title);
@@ -755,13 +809,19 @@ const LearnerView: React.FC = () => {
 
             <div className="text-center mb-6">
               <div className="flex flex-col gap-3 items-center">
+                {/* Reward Value text above input */}
+                {trail?.trailValue && (
+                  <p className="text-gray-400 text-sm mb-2">
+                    Reward Value: <span className="line-through">${trail.trailValue}</span>
+                  </p>
+                )}
                 <div className="relative w-80">
                   <span className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-500 text-lg">$</span>
                   <input
                     type="number"
                     onChange={(e) => setTipAmount(Number(e.target.value) || 0)}
                     placeholder={`${trail?.suggestedInvestment || 25}`}
-                    className="text-2xl font-bold text-yellow-600 bg-white border-2 border-yellow-300 rounded-lg outline-none text-center pl-8 pr-4 w-full h-12 placeholder:text-yellow-400 placeholder:opacity-60 focus:border-yellow-500 focus:ring-2 focus:ring-yellow-100 transition-all duration-200"
+                    className="text-2xl font-bold text-amber-700 bg-white border-2 border-amber-300 rounded-lg outline-none text-center pl-8 pr-4 w-full h-12 placeholder:text-amber-400 placeholder:opacity-60 focus:border-amber-500 focus:ring-2 focus:ring-amber-100 transition-all duration-200"
                     min="0"
                     step="0.01"
                   />
@@ -784,11 +844,6 @@ const LearnerView: React.FC = () => {
                 >
                   <Gift className="h-5 w-5 mr-2" />
                   <span>Tip ${tipAmount || 0}</span>
-                  {trail?.trailValue && (
-                    <span className="ml-2 text-white line-through text-sm opacity-70">
-                      ${trail.trailValue}
-                    </span>
-                  )}
                 </Button>
               </div>
             </div>
@@ -991,42 +1046,55 @@ const LearnerView: React.FC = () => {
                                   />
                                 </div>
                               )}
-                              <p className={`${step.type === 'reward' ? 'mb-12 text-amber-700' : 'mb-6 text-gray-600'}`}>
+                              <p className={`${step.type === 'reward' ? 'mb-6 text-amber-700 text-center text-lg' : 'mb-6 text-gray-600'}`}>
                                 {step.content}
                               </p>
-                              <div className="border-t border-gray-200 mb-2" />
+                              
+                              {/* Claim Reward button centered in content area for reward steps */}
+                              {step.type === 'reward' && (
+                                <div className={`flex justify-center mt-6 ${isStepLocked(index) ? 'blur-[16px] pointer-events-none' : ''}`}>
+                                  <Button
+                                    onClick={() => handleStepNext(index)}
+                                    disabled={!canStepProceed(index)}
+                                    className="disabled:opacity-50 disabled:cursor-not-allowed bg-gradient-to-r from-yellow-500 to-amber-600 text-white hover:from-yellow-600 hover:to-amber-700 shadow-lg px-6 py-3 text-base font-semibold"
+                                  >
+                                    🎉 Claim Reward 🎉
+                                  </Button>
+                                </div>
+                              )}
+                              
+                              {step.type !== 'reward' && <div className="border-t border-gray-200 mb-2" />}
                             </div>
                           </div>
                         </div>
                         
-                        {/* Button row - same as focused view */}
-                        <div className="px-4 sm:px-6 lg:px-8 pb-6 sm:pb-8">
-                          <div className={`flex flex-row items-end justify-between w-full mt-auto gap-2 ${isStepLocked(index) ? 'pointer-events-none' : ''}`}>
-                            <Button
-                              variant="outline"
-                              onClick={handleArrowPrev}
-                              disabled={isFirstStep}
-                              className={isFirstStep ? "opacity-0" : ""}
-                            >
-                              <ArrowLeft className="mr-2 h-4 w-4" />
-                            </Button>
-                            <div className="flex-1 flex justify-center">
-                              {step.type === 'video' && (
-                                <Button
-                                  variant="link"
-                                  className="underline text-gray-500 mx-auto"
-                                  onClick={() => {
-                                    setSkipToStep(currentStepIndex);
-                                    setShowSkipDialog(true);
-                                  }}
-                                >
-                                  Skip this step
-                                </Button>
-                              )}
-                            </div>
-                            <div className="flex items-center gap-2">
-                              {/* Hide progress circle for reward steps */}
-                              {step.type !== 'reward' && (
+                        {/* Button row - only for non-reward steps */}
+                        {step.type !== 'reward' && (
+                          <div className="px-4 sm:px-6 lg:px-8 pb-6 sm:pb-8">
+                            <div className={`flex flex-row items-end justify-between w-full mt-auto gap-2 ${isStepLocked(index) ? 'pointer-events-none' : ''}`}>
+                              <Button
+                                variant="outline"
+                                onClick={handleArrowPrev}
+                                disabled={isFirstStep}
+                                className={isFirstStep ? "opacity-0" : ""}
+                              >
+                                <ArrowLeft className="mr-2 h-4 w-4" />
+                              </Button>
+                              <div className="flex-1 flex justify-center">
+                                {step.type === 'video' && (
+                                  <Button
+                                    variant="link"
+                                    className="underline text-gray-500 mx-auto"
+                                    onClick={() => {
+                                      setSkipToStep(currentStepIndex);
+                                      setShowSkipDialog(true);
+                                    }}
+                                  >
+                                    Skip this step
+                                  </Button>
+                                )}
+                              </div>
+                              <div className="flex items-center gap-2">
                                 <div className="relative w-8 h-8">
                                   {!canStepProceed(index) ? (
                                     <motion.svg 
@@ -1063,29 +1131,17 @@ const LearnerView: React.FC = () => {
                                     </motion.div>
                                   )}
                                 </div>
-                              )}
-                              <Button
-                                onClick={() => handleStepNext(index)}
-                                disabled={!canStepProceed(index)}
-                                className={`disabled:opacity-50 disabled:cursor-not-allowed ${
-                                  step.type === 'reward' 
-                                    ? 'bg-gradient-to-r from-yellow-500 to-amber-600 text-white hover:from-yellow-600 hover:to-amber-700 shadow-lg' 
-                                    : 'bg-black text-white hover:bg-black/90'
-                                }`}
-                              >
-                                {step.type === 'reward' ? (
-                                  <>
-                                    🎉 Claim Reward 🎉
-                                  </>
-                                ) : (
-                                  <>
-                                    {isLastStep ? 'Complete Trail' : 'Next'} <ArrowRight className="ml-2 h-4 w-4" />
-                                  </>
-                                )}
-                              </Button>
+                                <Button
+                                  onClick={() => handleStepNext(index)}
+                                  disabled={!canStepProceed(index)}
+                                  className="disabled:opacity-50 disabled:cursor-not-allowed bg-black text-white hover:bg-black/90"
+                                >
+                                  {isLastStep ? 'Complete Trail' : 'Next'} <ArrowRight className="ml-2 h-4 w-4" />
+                                </Button>
+                              </div>
                             </div>
                           </div>
-                        </div>
+                        )}
                       </div>
                     </Card>
                     {/* Centered dash with equal spacing between cards */}
@@ -1187,6 +1243,10 @@ const LearnerView: React.FC = () => {
                           className={isStepLocked(currentStepIndex) ? 'blur-[16px] pointer-events-auto select-none relative cursor-pointer' : ''}
                           onClick={isStepLocked(currentStepIndex) ? () => {
                             setSkipTargetStep(currentStepIndex);
+                            // Save trail ID to localStorage for payment success redirect
+                            if (trail?.id) {
+                              localStorage.setItem('currentTrailId', trail.id);
+                            }
                             setShowSkipToStepDialog(true);
                           } : undefined}
                           onMouseEnter={isStepLocked(currentStepIndex) ? () => setLockHovered(true) : undefined}
@@ -1211,42 +1271,68 @@ const LearnerView: React.FC = () => {
                               />
                             </div>
                           )}
-                          <p className={`${currentStep.type === 'reward' ? 'mb-12 text-amber-700' : 'mb-6 text-gray-600'}`}>
+                          <p className={`${currentStep.type === 'reward' ? 'mb-6 text-amber-700 text-center text-lg' : 'mb-6 text-gray-600'}`}>
                             {currentStep.content}
                           </p>
-                          <div className="border-t border-gray-200 mb-2" />
+                          
+                          {/* Claim Reward button centered in content area for reward steps */}
+                          {currentStep.type === 'reward' && (
+                            <div className={`flex justify-center mt-6 ${isStepLocked(currentStepIndex) ? 'blur-[16px] pointer-events-none' : ''}`}>
+                              <Button
+                                onClick={() => handleFocusedNext()}
+                                disabled={!canStepProceed(currentStepIndex)}
+                                className="disabled:opacity-50 disabled:cursor-not-allowed bg-gradient-to-r from-yellow-500 to-amber-600 text-white hover:from-yellow-600 hover:to-amber-700 shadow-lg px-6 py-3 text-base font-semibold"
+                              >
+                                🎉 Claim Reward 🎉
+                              </Button>
+                            </div>
+                          )}
+                          
+                          {currentStep.type !== 'reward' && <div className="border-t border-gray-200 mb-2" />}
                         </div>
                       </div>
                     </div>
                     
-                    {/* Button row */}
-                    <div className="px-4 sm:px-6 lg:px-8 pb-6 sm:pb-8">
-                      <div className={`flex flex-row items-end justify-between w-full mt-auto gap-2 ${isStepLocked(currentStepIndex) ? 'pointer-events-none' : ''}`}>
-                        <Button
-                          variant="outline"
-                          onClick={handleArrowPrev}
-                          disabled={isFirstStep}
-                          className={isFirstStep ? "opacity-0" : ""}
-                        >
-                          <ArrowLeft className="mr-2 h-4 w-4" />
-                        </Button>
-                        <div className="flex-1 flex justify-center">
-                          {currentStep.type === 'video' && (
-                            <Button
-                              variant="link"
-                              className="underline text-gray-500 mx-auto"
-                              onClick={() => {
-                                setSkipToStep(currentStepIndex);
-                                setShowSkipDialog(true);
-                              }}
-                            >
-                              Skip this step
-                            </Button>
-                          )}
-                        </div>
-                        <div className="flex items-center gap-2">
-                          {/* Hide progress circle for reward steps */}
-                          {currentStep.type !== 'reward' && (
+                    {/* Button row - only for non-reward steps */}
+                    {currentStep.type !== 'reward' && (
+                      <div className="px-4 sm:px-6 lg:px-8 pb-6 sm:pb-8">
+                        <div className={`flex flex-row items-end justify-between w-full mt-auto gap-2 ${isStepLocked(currentStepIndex) ? 'pointer-events-none' : ''}`}>
+                          <Button
+                            variant="outline"
+                            onClick={handleArrowPrev}
+                            disabled={isFirstStep}
+                            className={isFirstStep ? "opacity-0" : ""}
+                          >
+                            <ArrowLeft className="mr-2 h-4 w-4" />
+                          </Button>
+                          <div className="flex-1 flex justify-center">
+                            {currentStep.type === 'video' && (
+                              <Button
+                                variant="link"
+                                className="underline text-gray-500 mx-auto"
+                                onClick={() => {
+                                  if (!isAuthenticated || !user) {
+                                    toast({
+                                      title: "Sign in required",
+                                      description: "Please sign in to make payments.",
+                                      variant: "destructive",
+                                    });
+                                    return;
+                                  }
+                                  setSkipToStep(currentStepIndex);
+                                  // Save trail ID to localStorage for payment success redirect
+                                  if (trail?.id) {
+                                    localStorage.setItem('currentTrailId', trail.id);
+                                  }
+                                  setShowSkipDialog(true);
+                                }}
+                              >
+                                Skip this step
+                              </Button>
+                            )}
+                          </div>
+                          <div className="flex items-center gap-2">
+                            {/* Progress circle for non-reward steps */}
                             <div className="relative w-8 h-8">
                               {!canStepProceed(currentStepIndex) ? (
                                 <motion.svg 
@@ -1283,29 +1369,17 @@ const LearnerView: React.FC = () => {
                                 </motion.div>
                               )}
                             </div>
-                          )}
-                          <Button
-                            onClick={() => handleFocusedNext()}
-                            disabled={!canStepProceed(currentStepIndex)}
-                            className={`disabled:opacity-50 disabled:cursor-not-allowed ${
-                              currentStep.type === 'reward' 
-                                ? 'bg-gradient-to-r from-yellow-500 to-amber-600 text-white hover:from-yellow-600 hover:to-amber-700 shadow-lg' 
-                                : 'bg-black text-white hover:bg-black/90'
-                            }`}
-                          >
-                            {currentStep.type === 'reward' ? (
-                              <>
-                                🎉 Claim Reward 🎉
-                              </>
-                            ) : (
-                              <>
-                                {isLastStep ? 'Complete Trail' : 'Next'} <ArrowRight className="ml-2 h-4 w-4" />
-                              </>
-                            )}
-                          </Button>
+                            <Button
+                              onClick={() => handleFocusedNext()}
+                              disabled={!canStepProceed(currentStepIndex)}
+                              className="disabled:opacity-50 disabled:cursor-not-allowed bg-black text-white hover:bg-black/90"
+                            >
+                              {isLastStep ? 'Complete Trail' : 'Next'} <ArrowRight className="ml-2 h-4 w-4" />
+                            </Button>
+                          </div>
                         </div>
                       </div>
-                    </div>
+                    )}
                   </div>
                 </motion.div>
               </AnimatePresence>
@@ -1392,6 +1466,14 @@ const LearnerView: React.FC = () => {
               Cancel
             </Button>
             <Button onClick={() => {
+              if (!isAuthenticated || !user) {
+                toast({
+                  title: "Sign in required",
+                  description: "Please sign in to make payments.",
+                  variant: "destructive",
+                });
+                return;
+              }
               if (skipTargetStep !== null && trail && trail.trailValue && trail.steps) {
                 const cost = Math.round((trail.trailValue / trail.steps.length) * (skipTargetStep - progressStepIndex));
                 setSkipPaymentAmount(cost);
@@ -1408,7 +1490,7 @@ const LearnerView: React.FC = () => {
 
       {/* Stripe Payment Modal for Skip */}
       <Dialog open={showStripePayment} onOpenChange={setShowStripePayment}>
-        <DialogContent className="max-w-md">
+        <DialogContent className="w-[95vw] min-w-[400px] max-w-2xl md:max-w-lg lg:max-w-xl xl:max-w-2xl max-h-[90vh] overflow-y-auto overflow-x-hidden">
           <DialogHeader>
             <DialogTitle className="text-2xl font-bold">
               Skip to Step {skipPaymentTarget !== null ? skipPaymentTarget + 1 : ''}
@@ -1424,12 +1506,15 @@ const LearnerView: React.FC = () => {
               creatorId={trail?.creator || 'unknown'}
               onSuccess={() => {
                 if (skipPaymentTarget !== null && trail) {
-                  // Mark all steps up to and including skipPaymentTarget as completed
+                  // Mark all steps up to (but NOT including) skipPaymentTarget as completed
                   const newCompletedSteps = new Set(completedSteps);
-                  for (let i = progressStepIndex + 1; i <= skipPaymentTarget; i++) {
+                  for (let i = 0; i < skipPaymentTarget; i++) {
                     newCompletedSteps.add(i);
                   }
                   setCompletedSteps(newCompletedSteps);
+                  
+                  // Unlock all steps up to the target step
+                  setProgressStepIndex(skipPaymentTarget);
                   
                   // Check if the target step is a reward step and trigger confetti
                   const targetStep = trail.steps[skipPaymentTarget];
@@ -1437,8 +1522,8 @@ const LearnerView: React.FC = () => {
                     setPlayConfetti(true);
                   }
                   
+                  // Navigate to the target step
                   setCurrentStepIndex(skipPaymentTarget);
-                  setProgressStepIndex(skipPaymentTarget);
                   
                   // Track skip payment
                   analyticsService.trackTipDonated(trail.id, skipPaymentAmount);
@@ -1446,7 +1531,7 @@ const LearnerView: React.FC = () => {
                 
                 toast({
                   title: "Payment successful!",
-                  description: `You've skipped to step ${skipPaymentTarget !== null ? skipPaymentTarget + 1 : ''}.`,
+                  description: `You've unlocked step ${skipPaymentTarget !== null ? skipPaymentTarget + 1 : ''} and all previous steps. Complete the current step to mark it as finished.`,
                 });
                 
                 setShowStripePayment(false);
@@ -1477,18 +1562,35 @@ const LearnerView: React.FC = () => {
               return;
             }
             if (!user) return;
+            
             const savedTrail = {
               ...trail,
               active: true,
-              progressStepIndex,
-              completedSteps: Array.from(completedSteps),
+              currentStepIndex, // Save current step position
+              progressStepIndex, // Save furthest unlocked step
+              completedSteps: Array.from(completedSteps), // Save completed steps
+              videoWatchTime, // Save video watch progress
               lastSavedAt: new Date().toISOString(),
             };
+            
             const userTrails = await getUserTrails();
             const { drafts, published } = userTrails;
-            const allUserTrails = [...drafts, ...published];
-            const filteredDrafts = allUserTrails.filter((t: any) => t.id !== savedTrail.id);
-            localStorage.setItem(`user_${user.id}_drafts`, JSON.stringify([...filteredDrafts, savedTrail]));
+            
+            // Check if user is the creator of this trail
+            const isCreator = trail?.creator === user.id;
+            
+            if (isCreator) {
+              // If user is creator, save to drafts (their created trails)
+              const allUserTrails = [...drafts, ...published];
+              const filteredTrails = allUserTrails.filter((t: any) => t.id !== savedTrail.id);
+              localStorage.setItem(`user_${user.id}_drafts`, JSON.stringify([...filteredTrails, savedTrail]));
+            } else {
+              // If user is not creator, save to saved trails (trails they're learning)
+              const savedTrails = JSON.parse(localStorage.getItem(`user_${user.id}_saved`) || '[]');
+              const filteredSaved = savedTrails.filter((t: any) => t.id !== savedTrail.id);
+              localStorage.setItem(`user_${user.id}_saved`, JSON.stringify([...filteredSaved, savedTrail]));
+            }
+            
             toast({ title: 'Progress saved!', description: 'You can resume this trail from your profile.', duration: 1000 });
           }}
         >

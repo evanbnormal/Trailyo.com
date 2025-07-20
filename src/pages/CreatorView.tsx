@@ -169,32 +169,53 @@ const ContentPreview = ({
 
       // Default fallback UI with your logo
       const fallbackUi = (
-        <div className="w-full h-full bg-gray-200 flex flex-col items-center justify-center p-4">
-          <img src="/Asset 10newest.png" alt="Default thumbnail" className="w-16 h-16 mb-2 object-contain" />
-          <p className="text-sm text-gray-600 text-center">
+        <div className="w-full h-full bg-gradient-to-br from-gray-100 to-gray-200 flex flex-col items-center justify-center p-4">
+          <div className="w-16 h-16 mb-3 bg-white rounded-lg shadow-sm flex items-center justify-center">
+            <img src="/Asset 10newest.png" alt="Default thumbnail" className="w-10 h-10 object-contain" />
+          </div>
+          <p className="text-sm text-gray-600 text-center font-medium">
             {isValidUrl(debouncedUrl) ? 'Click the edit button to upload a custom thumbnail' : 'Enter a URL or upload a thumbnail'}
           </p>
+          {isValidUrl(debouncedUrl) && (
+            <p className="text-xs text-gray-500 text-center mt-1">
+              Or we'll try to fetch a preview automatically
+            </p>
+          )}
         </div>
       );
 
       if (isValidUrl(debouncedUrl) && !getYouTubeVideoId(debouncedUrl) && !thumbnailUrl) {
         // Try to fetch thumbnail from the URL
         const fetchPromise = async () => {
+          console.log('Fetching thumbnail for:', debouncedUrl);
           const response = await fetch(`${PROXY_BASE_URL}/proxy?url=${encodeURIComponent(debouncedUrl)}`);
-          if (!response.ok) throw new Error('Failed to fetch preview');
+          console.log('Proxy response status:', response.status);
+          
+          if (!response.ok) {
+            const errorText = await response.text();
+            console.log('Proxy error:', errorText);
+            throw new Error(`Failed to fetch preview: ${response.status} ${errorText}`);
+          }
+          
           const blob = await response.blob();
+          console.log('Blob type:', blob.type, 'Size:', blob.size);
+          
           if (!blob.type.startsWith('image/')) {
             throw new Error('Fetched content is not an image');
           }
+          
           const base64Url = await new Promise<string>((resolve, reject) => {
             const reader = new FileReader();
             reader.onloadend = () => resolve(reader.result as string);
             reader.onerror = reject;
             reader.readAsDataURL(blob);
           });
+          
           if (isCancelled) {
             throw new Error("Component unmounted");
           }
+          
+          console.log('Successfully converted to base64');
           return base64Url;
         };
 

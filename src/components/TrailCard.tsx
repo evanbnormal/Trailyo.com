@@ -5,7 +5,10 @@ export const SavedTrailCard: React.FC<{ trail: any; onClick?: () => void; onDele
   // Calculate progress percentage if available
   const totalSteps = trail?.steps?.length || 1;
   const progressStepIndex = trail?.progressStepIndex ?? 0;
-  const progress = Math.round(((progressStepIndex + 1) / totalSteps) * 100);
+  const completedSteps = trail?.completedSteps?.length || 0;
+  
+  // Use completed steps for more accurate progress
+  const progress = Math.round((completedSteps / totalSteps) * 100);
 
   return (
     <Card className="overflow-hidden hover:shadow-lg transition-shadow duration-300 cursor-pointer" onClick={onClick}>

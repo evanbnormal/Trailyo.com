@@ -10,19 +10,55 @@ export default function PaymentSuccessPage() {
   const searchParams = useSearchParams();
   const router = useRouter();
   const [isProcessing, setIsProcessing] = useState(true);
-  const sessionId = searchParams.get('session_id');
+  const paymentIntent = searchParams.get('payment_intent');
+  const redirectStatus = searchParams.get('redirect_status');
 
   useEffect(() => {
-    if (sessionId) {
-      // Here you could verify the payment with your backend
-      // For now, we'll just show success
+    if (paymentIntent && redirectStatus === 'succeeded') {
+      // Payment was successful
       setIsProcessing(false);
+      
+      // Store payment success in localStorage
+      const paymentData = {
+        paymentIntent,
+        timestamp: Date.now(),
+        status: 'succeeded'
+      };
+      localStorage.setItem('lastPaymentSuccess', JSON.stringify(paymentData));
+      
       toast({
         title: "Payment Successful!",
         description: "Your payment has been processed successfully.",
       });
+      
+      // Redirect back to the trail after a short delay
+      setTimeout(() => {
+        // Try to get the trail ID from localStorage or redirect to home
+        const currentTrail = localStorage.getItem('currentTrailId');
+        if (currentTrail) {
+          router.push(`/trail/${currentTrail}`);
+        } else {
+          router.push('/');
+        }
+      }, 2000);
+    } else if (paymentIntent && redirectStatus === 'failed') {
+      // Payment failed
+      setIsProcessing(false);
+      toast({
+        title: "Payment Failed",
+        description: "There was an issue processing your payment. Please try again.",
+        variant: "destructive",
+      });
+      
+      setTimeout(() => {
+        router.push('/');
+      }, 2000);
+    } else {
+      // No payment intent found
+      setIsProcessing(false);
+      router.push('/');
     }
-  }, [sessionId]);
+  }, [paymentIntent, redirectStatus, router]);
 
   if (isProcessing) {
     return (
