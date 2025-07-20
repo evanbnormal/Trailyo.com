@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from './ui/dialog';
 import { Button } from './ui/button';
 import { Badge } from './ui/badge';
-import { Check, Star, Zap, Users, BarChart3, Crown } from 'lucide-react';
+import { Check, Star, Zap, Users, BarChart3, Crown, X } from 'lucide-react';
 
 interface SubscriptionModalProps {
   open: boolean;
@@ -30,12 +30,22 @@ const SubscriptionModal: React.FC<SubscriptionModalProps> = ({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-2xl p-0 overflow-hidden">
-        <DialogHeader className="p-6 pb-0">
-          <div className="flex items-center justify-center mb-4">
-            <div className="bg-gradient-to-r from-yellow-500 to-amber-600 p-3 rounded-full">
-              <Crown className="h-8 w-8 text-white" />
+      <DialogContent className="max-w-4xl max-h-[90vh] p-0 overflow-y-auto rounded-xl">
+        <DialogHeader className="p-6 pb-0 sticky top-0 bg-white z-10">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center justify-center mb-4">
+              <div className="bg-gradient-to-r from-yellow-500 to-amber-600 p-3 rounded-full">
+                <Crown className="h-8 w-8 text-white" />
+              </div>
             </div>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => onOpenChange(false)}
+              className="h-8 w-8 p-0"
+            >
+              <X className="h-4 w-4" />
+            </Button>
           </div>
           <DialogTitle className="text-3xl font-bold text-center text-gray-900">
             Unlock Your Creator Potential
@@ -68,34 +78,94 @@ const SubscriptionModal: React.FC<SubscriptionModalProps> = ({
                 14-Day Free Trial
               </div>
               <p className="text-sm text-gray-600 text-center">
-                No credit card required • Cancel anytime
+                Free trial • Cancel anytime
               </p>
             </div>
           </div>
 
-          {/* Features */}
-          <div className="space-y-4 mb-6">
-            <h4 className="font-semibold text-gray-900 mb-3">What's included:</h4>
-            <div className="space-y-3">
-              <div className="flex items-center">
-                <Check className="h-5 w-5 text-green-500 mr-3 flex-shrink-0" />
-                <span className="text-gray-700">Create unlimited trails</span>
+          {/* Feature Comparison */}
+          <div className="grid md:grid-cols-2 gap-6 mb-6">
+            {/* Free Tier */}
+            <div className="border border-gray-200 rounded-xl p-6">
+              <div className="flex items-center mb-4">
+                <div className="bg-gray-100 p-2 rounded-full mr-3">
+                  <Users className="h-6 w-6 text-gray-600" />
+                </div>
+                <div>
+                  <h4 className="text-xl font-semibold text-gray-900">Free Tier</h4>
+                  <p className="text-sm text-gray-600">Perfect for learning</p>
+                </div>
               </div>
-              <div className="flex items-center">
-                <Check className="h-5 w-5 text-green-500 mr-3 flex-shrink-0" />
-                <span className="text-gray-700">Publish and share with the world</span>
+              
+              <div className="space-y-3">
+                <div className="flex items-center">
+                  <Check className="h-4 w-4 text-green-500 mr-3 flex-shrink-0" />
+                  <span className="text-sm text-gray-700">Browse and complete unlimited trails</span>
+                </div>
+                <div className="flex items-center">
+                  <Check className="h-4 w-4 text-green-500 mr-3 flex-shrink-0" />
+                  <span className="text-sm text-gray-700">Track your learning progress</span>
+                </div>
+                <div className="flex items-center">
+                  <Check className="h-4 w-4 text-green-500 mr-3 flex-shrink-0" />
+                  <span className="text-sm text-gray-700">Access to all public trails</span>
+                </div>
+                <div className="flex items-center">
+                  <Check className="h-4 w-4 text-green-500 mr-3 flex-shrink-0" />
+                  <span className="text-sm text-gray-700">Basic support</span>
+                </div>
+                <div className="flex items-center">
+                  <X className="h-4 w-4 text-red-500 mr-3 flex-shrink-0" />
+                  <span className="text-sm text-gray-500">Create trails</span>
+                </div>
+                <div className="flex items-center">
+                  <X className="h-4 w-4 text-red-500 mr-3 flex-shrink-0" />
+                  <span className="text-sm text-gray-500">Publish trails</span>
+                </div>
+                <div className="flex items-center">
+                  <X className="h-4 w-4 text-red-500 mr-3 flex-shrink-0" />
+                  <span className="text-sm text-gray-500">Advanced analytics</span>
+                </div>
               </div>
-              <div className="flex items-center">
-                <Check className="h-5 w-5 text-green-500 mr-3 flex-shrink-0" />
-                <span className="text-gray-700">Advanced analytics and insights</span>
+            </div>
+
+            {/* Creator Tier */}
+            <div className="border-2 border-yellow-200 bg-gradient-to-br from-yellow-50 to-amber-50 rounded-xl p-6">
+              <div className="flex items-center mb-4">
+                <div className="bg-gradient-to-r from-yellow-500 to-amber-600 p-2 rounded-full mr-3">
+                  <Crown className="h-6 w-6 text-white" />
+                </div>
+                <div>
+                  <h4 className="text-xl font-semibold text-gray-900">Creator</h4>
+                  <p className="text-sm text-gray-600">Everything + trail creation</p>
+                </div>
               </div>
-              <div className="flex items-center">
-                <Check className="h-5 w-5 text-green-500 mr-3 flex-shrink-0" />
-                <span className="text-gray-700">Priority support</span>
-              </div>
-              <div className="flex items-center">
-                <Check className="h-5 w-5 text-green-500 mr-3 flex-shrink-0" />
-                <span className="text-gray-700">Early access to new features</span>
+              
+              <div className="space-y-3">
+                <div className="flex items-center">
+                  <Check className="h-4 w-4 text-green-500 mr-3 flex-shrink-0" />
+                  <span className="text-sm text-gray-700">Everything in Free Tier</span>
+                </div>
+                <div className="flex items-center">
+                  <Check className="h-4 w-4 text-green-500 mr-3 flex-shrink-0" />
+                  <span className="text-sm text-gray-700">Create unlimited trails</span>
+                </div>
+                <div className="flex items-center">
+                  <Check className="h-4 w-4 text-green-500 mr-3 flex-shrink-0" />
+                  <span className="text-sm text-gray-700">Publish and share with the world</span>
+                </div>
+                <div className="flex items-center">
+                  <Check className="h-4 w-4 text-green-500 mr-3 flex-shrink-0" />
+                  <span className="text-sm text-gray-700">Advanced analytics and insights</span>
+                </div>
+                <div className="flex items-center">
+                  <Check className="h-4 w-4 text-green-500 mr-3 flex-shrink-0" />
+                  <span className="text-sm text-gray-700">Priority support</span>
+                </div>
+                <div className="flex items-center">
+                  <Check className="h-4 w-4 text-green-500 mr-3 flex-shrink-0" />
+                  <span className="text-sm text-gray-700">Early access to new features</span>
+                </div>
               </div>
             </div>
           </div>
@@ -105,7 +175,7 @@ const SubscriptionModal: React.FC<SubscriptionModalProps> = ({
             <Button
               onClick={handleSubscribe}
               disabled={isLoading}
-              className="w-full bg-gradient-to-r from-yellow-500 to-amber-600 hover:from-yellow-600 hover:to-amber-700 text-white font-semibold py-3 text-lg"
+              className="w-full bg-gradient-to-r from-yellow-500 to-amber-600 hover:from-yellow-600 hover:to-amber-700 text-white font-semibold py-3 text-lg rounded-lg"
             >
               {isLoading ? (
                 <div className="flex items-center">
@@ -123,28 +193,10 @@ const SubscriptionModal: React.FC<SubscriptionModalProps> = ({
             <Button
               variant="outline"
               onClick={() => onOpenChange(false)}
-              className="w-full"
+              className="w-full rounded-lg"
             >
               Maybe Later
             </Button>
-          </div>
-
-          {/* Trust Indicators */}
-          <div className="mt-6 pt-6 border-t border-gray-200">
-            <div className="flex items-center justify-center space-x-6 text-sm text-gray-500">
-              <div className="flex items-center">
-                <Check className="h-4 w-4 mr-1" />
-                Secure Payment
-              </div>
-              <div className="flex items-center">
-                <Check className="h-4 w-4 mr-1" />
-                Cancel Anytime
-              </div>
-              <div className="flex items-center">
-                <Check className="h-4 w-4 mr-1" />
-                Money Back Guarantee
-              </div>
-            </div>
           </div>
         </div>
       </DialogContent>
