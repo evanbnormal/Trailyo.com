@@ -19,11 +19,14 @@ import {
   Image as ImageIcon,
   Share2,
   Copy,
-  FileText
+  FileText,
+  Crown,
+  Gift
 } from 'lucide-react';
 import { Link, useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
 import { useAuth } from '@/contexts/AuthContext';
+import { useSubscription } from '@/hooks/useSubscription';
 import { SavedTrailCard } from '@/components/TrailCard';
 
 interface TrailStep {
@@ -64,6 +67,14 @@ const Profile: React.FC = () => {
   const [selectedTrail, setSelectedTrail] = useState<Trail | null>(null);
   const navigate = useNavigate();
   const { user, getUserTrails, saveUserTrail, deleteUserTrail } = useAuth();
+  const { subscriptionStatus, canCreateTrails, loadSubscriptionStatus } = useSubscription();
+
+  // Force refresh subscription status when profile loads
+  useEffect(() => {
+    if (user?.id) {
+      loadSubscriptionStatus();
+    }
+  }, [user?.id, loadSubscriptionStatus]);
 
   // Load trails from user's account on component mount
   useEffect(() => {
@@ -77,7 +88,7 @@ const Profile: React.FC = () => {
       
       // Combine and sort all trails by creation date
       const allTrails = [...drafts, ...published].sort((a, b) => 
-        new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+        new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
       );
       
       setTrails(allTrails);
@@ -104,7 +115,7 @@ const Profile: React.FC = () => {
       window.removeEventListener('focus', handleFocus);
       window.removeEventListener('storage', handleStorageChange);
     };
-  }, [user, getUserTrails, saveUserTrail]);
+  }, [user, getUserTrails]);
 
   const publishedTrails = trails.filter(trail => (trail as any).status === 'published' || (trail as any).is_published);
   const draftTrails = trails.filter(trail => (trail as any).status === 'draft' || !(trail as any).is_published);
@@ -438,7 +449,24 @@ const Profile: React.FC = () => {
             </span>
           </div>
           <h1 className="text-3xl font-bold text-gray-900 mb-2">{user?.name || 'User'}</h1>
-          <p className="text-gray-600 mb-6">Trail Creator</p>
+          <p className="text-gray-600 mb-6">
+            {canCreateTrails() ? (
+              <>
+                <Crown className="inline-block h-4 w-4 mr-1 text-yellow-500" />
+                Creator
+                {subscriptionStatus.isTrialing && (
+                  <span className="text-xs text-blue-600 bg-blue-100 px-2 py-1 rounded-full ml-2">
+                    Trial
+                  </span>
+                )}
+              </>
+            ) : (
+              <>
+                <Gift className="inline-block h-4 w-4 mr-1 text-gray-400" />
+                Free Tier
+              </>
+            )}
+          </p>
           
           {/* Create New Trail Button */}
           <Link to="/creator">

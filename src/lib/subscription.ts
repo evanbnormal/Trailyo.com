@@ -11,7 +11,7 @@ export interface SubscriptionStatus {
 }
 
 export class SubscriptionService {
-  static async createSubscription(email: string): Promise<{ clientSecret: string; subscriptionId: string }> {
+  static async createSubscription(email: string, userId?: string): Promise<{ clientSecret: string; setupIntentId: string }> {
     try {
       // First, create or get customer
       const customerResponse = await fetch('/api/stripe/create-customer', {
@@ -19,7 +19,7 @@ export class SubscriptionService {
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ email }),
+        body: JSON.stringify({ email, userId }),
       });
 
       if (!customerResponse.ok) {
@@ -28,8 +28,8 @@ export class SubscriptionService {
 
       const { customerId } = await customerResponse.json();
 
-      // Create subscription
-      const subscriptionResponse = await fetch('/api/subscriptions/create', {
+      // Create setup intent
+      const setupIntentResponse = await fetch('/api/subscriptions/create', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -37,14 +37,35 @@ export class SubscriptionService {
         body: JSON.stringify({ customerId, email }),
       });
 
-      if (!subscriptionResponse.ok) {
-        throw new Error('Failed to create subscription');
+      if (!setupIntentResponse.ok) {
+        throw new Error('Failed to create setup intent');
       }
 
-      const { clientSecret, subscriptionId } = await subscriptionResponse.json();
-      return { clientSecret, subscriptionId };
+      const { clientSecret, setupIntentId } = await setupIntentResponse.json();
+      return { clientSecret, setupIntentId };
     } catch (error) {
-      console.error('Subscription creation error:', error);
+      console.error('Setup intent creation error:', error);
+      throw error;
+    }
+  }
+
+  static async confirmSubscription(customerId: string, email: string, setupIntentId: string): Promise<{ subscriptionId: string; status: string }> {
+    try {
+      const response = await fetch('/api/subscriptions/confirm', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ customerId, email, setupIntentId }),
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to confirm subscription');
+      }
+
+      return await response.json();
+    } catch (error) {
+      console.error('Subscription confirmation error:', error);
       throw error;
     }
   }
@@ -69,13 +90,20 @@ export class SubscriptionService {
     }
   }
 
-  static async redirectToCheckout(clientSecret: string): Promise<void> {
+  static async setupSubscriptionPayment(clientSecret: string): Promise<void> {
     const stripe = await stripePromise;
     if (!stripe) {
       throw new Error('Stripe failed to load');
     }
 
-    const { error } = await stripe.confirmCardPayment(clientSecret);
+    // For subscriptions with trial, we need to confirm the setup intent
+    const { error } = await stripe.confirmSetup({
+      clientSecret,
+      confirmParams: {
+        return_url: `${window.location.origin}/subscription-success`,
+      },
+    });
+
     if (error) {
       throw new Error(error.message);
     }

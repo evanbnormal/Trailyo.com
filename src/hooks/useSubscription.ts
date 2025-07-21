@@ -35,17 +35,18 @@ export const useSubscription = () => {
     return subscriptionStatus.isSubscribed || subscriptionStatus.isTrialing;
   };
 
-  const startSubscription = async () => {
+  const startSubscription = async (): Promise<{ clientSecret: string; setupIntentId: string }> => {
     if (!user?.email) {
       throw new Error('User email is required');
     }
 
     try {
-      const { clientSecret } = await SubscriptionService.createSubscription(user.email);
-      await SubscriptionService.redirectToCheckout(clientSecret);
+      const result = await SubscriptionService.createSubscription(user.email, user.id);
       
       // Reload subscription status after successful subscription
       await loadSubscriptionStatus();
+      
+      return result;
     } catch (error) {
       console.error('Failed to start subscription:', error);
       throw error;

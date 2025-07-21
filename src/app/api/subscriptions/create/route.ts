@@ -16,18 +16,11 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Create or retrieve the subscription
-    const subscription = await stripe.subscriptions.create({
+    // Create a setup intent for the subscription
+    const setupIntent = await stripe.setupIntents.create({
       customer: customerId,
-      items: [
-        {
-          price: process.env.STRIPE_CREATOR_SUBSCRIPTION_PRICE_ID, // We'll set this up
-        },
-      ],
-      trial_period_days: 14, // 14-day free trial
-      payment_behavior: 'default_incomplete',
-      payment_settings: { save_default_payment_method: 'on_subscription' },
-      expand: ['latest_invoice.payment_intent'],
+      payment_method_types: ['card'],
+      usage: 'off_session',
       metadata: {
         email: email,
         subscription_type: 'creator',
@@ -35,14 +28,13 @@ export async function POST(request: NextRequest) {
     });
 
     return NextResponse.json({
-      subscriptionId: subscription.id,
-      clientSecret: (subscription.latest_invoice as any)?.payment_intent?.client_secret,
-      status: subscription.status,
+      clientSecret: setupIntent.client_secret,
+      setupIntentId: setupIntent.id,
     });
   } catch (error) {
-    console.error('Subscription creation error:', error);
+    console.error('Setup intent creation error:', error);
     return NextResponse.json(
-      { error: 'Failed to create subscription' },
+      { error: 'Failed to create setup intent' },
       { status: 500 }
     );
   }

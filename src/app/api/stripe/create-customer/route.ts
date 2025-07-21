@@ -7,7 +7,7 @@ const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
 
 export async function POST(request: NextRequest) {
   try {
-    const { email } = await request.json();
+    const { email, userId } = await request.json();
 
     if (!email) {
       return NextResponse.json(
@@ -16,35 +16,38 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Check if customer already exists by email
+    // Check if customer already exists
     const existingCustomers = await stripe.customers.list({
       email: email,
       limit: 1,
     });
 
-    let customerId: string;
-
     if (existingCustomers.data.length > 0) {
-      // Use existing customer
-      customerId = existingCustomers.data[0].id;
-    } else {
-      // Create new customer
-      const customer = await stripe.customers.create({
-        email: email,
-        metadata: {
-          source: 'trailyo_creator_subscription',
-          // TODO: Add user ID to metadata when you have user authentication
-          // userId: userId,
-        },
+      const customer = existingCustomers.data[0];
+      
+      // Update customer metadata if userId is provided
+      if (userId && !customer.metadata?.userId) {
+        await stripe.customers.update(customer.id, {
+          metadata: { userId },
+        });
+      }
+      
+      return NextResponse.json({
+        customerId: customer.id,
       });
-      customerId = customer.id;
     }
 
+    // Create new customer
+    const customer = await stripe.customers.create({
+      email: email,
+      metadata: userId ? { userId } : {},
+    });
+
     return NextResponse.json({
-      customerId: customerId,
+      customerId: customer.id,
     });
   } catch (error) {
-    console.error('Create customer error:', error);
+    console.error('Customer creation error:', error);
     return NextResponse.json(
       { error: 'Failed to create customer' },
       { status: 500 }
