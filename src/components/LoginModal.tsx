@@ -238,7 +238,7 @@ const LoginModal: React.FC<LoginModalProps> = ({ isOpen, onClose, onSuccess }) =
               <img 
                 src="/Logo Black.svg" 
                 alt="Trailyo" 
-                className="h-12 w-auto transform translate-x-2"
+                className="h-12 w-auto"
               />
             </div>
             <h2 className="text-lg font-semibold mb-3">

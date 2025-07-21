@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
-import { User, LogOut, Settings, Crown, Gift } from 'lucide-react';
+import { User, LogOut, Settings, Crown, Gift, Menu } from 'lucide-react';
 import { Button } from './ui/button';
 import { Avatar, AvatarFallback } from './ui/avatar';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, DropdownMenuSeparator } from './ui/dropdown-menu';
@@ -52,7 +52,7 @@ const Navigation: React.FC = () => {
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
                   <Button variant="ghost" className="text-white hover:bg-white/10 p-2">
-                    <User className="h-16 w-16 text-white" />
+                    <Menu className="h-12 w-12 text-white" />
                   </Button>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="end" className="w-64">
@@ -64,7 +64,7 @@ const Navigation: React.FC = () => {
                       {canCreateTrails() ? (
                         <>
                           <Crown className="h-4 w-4 text-yellow-500" />
-                          <span className="text-xs text-green-600 font-medium">Creator</span>
+                          <span className="text-xs text-yellow-600 font-medium">Creator</span>
                           {subscriptionStatus.isTrialing && (
                             <span className="text-xs text-blue-600 bg-blue-100 px-2 py-1 rounded-full">
                               Trial

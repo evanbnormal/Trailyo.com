@@ -66,7 +66,7 @@ export async function POST(request: NextRequest) {
     // Send reset email
     try {
       // Use port 3001 since that's where your app is running
-      const baseUrl = 'http://localhost:3001';
+      const baseUrl = process.env.BASE_URL || 'http://localhost:3001';
       const resetUrl = `${baseUrl}/reset-password?token=${token}`;
       
       console.log('=== SENDGRID DEBUG ===');

@@ -3,13 +3,17 @@
 import React, { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
-import { Plus } from 'lucide-react';
+import { Plus, Lock } from 'lucide-react';
 import LoginModal from '@/components/LoginModal';
+import SubscriptionModal from '@/components/SubscriptionModal';
 import { useAuth } from '@/contexts/AuthContext';
+import { useSubscription } from '@/hooks/useSubscription';
 
 const Home: React.FC = () => {
   const [showLoginModal, setShowLoginModal] = useState(false);
+  const [showSubscriptionModal, setShowSubscriptionModal] = useState(false);
   const { isAuthenticated, login } = useAuth();
+  const { canCreateTrails, startSubscription } = useSubscription();
   const navigate = useNavigate();
   const searchParams = typeof window !== 'undefined' ? new URLSearchParams(window.location.search) : null;
 
@@ -22,20 +26,9 @@ const Home: React.FC = () => {
       window.history.replaceState({}, '', url.pathname + url.search);
     }
     
-    // Handle email confirmation success and auto-login
+    // Handle email confirmation - just clean up URL params silently
     if (searchParams && searchParams.get('confirmed') === 'true') {
-      const email = searchParams.get('email');
-      const autoLogin = searchParams.get('autoLogin');
-      
-      if (email && autoLogin === 'true') {
-        // Auto-login the user
-        handleAutoLogin(email);
-      } else {
-        // Show success message for manual confirmation
-        alert('Email confirmed successfully! You can now sign in.');
-      }
-      
-      // Remove the params from the URL
+      // Remove the params from the URL silently
       const url = new URL(window.location.href);
       url.searchParams.delete('confirmed');
       url.searchParams.delete('email');
@@ -44,27 +37,18 @@ const Home: React.FC = () => {
     }
   }, []);
 
-  const handleAutoLogin = async (email: string) => {
-    try {
-      // For auto-login after email confirmation, we'll need to implement
-      // a way to get the user's password or use a temporary token
-      // For now, we'll show a success message and prompt them to login
-      alert(`Email confirmed successfully! Welcome to Trailyo, ${email}. Please sign in to continue.`);
-      setShowLoginModal(true);
-    } catch (error) {
-      console.error('Auto-login error:', error);
-      alert('Email confirmed successfully! Please sign in to continue.');
-      setShowLoginModal(true);
-    }
-  };
+
 
   const handleCreateTrail = () => {
-    if (isAuthenticated) {
-      // User is signed in, navigate to creator
-      navigate('/creator');
-    } else {
+    if (!isAuthenticated) {
       // User is not signed in, show login modal
       setShowLoginModal(true);
+    } else if (!canCreateTrails()) {
+      // User is signed in but doesn't have creator subscription, show upgrade modal
+      setShowSubscriptionModal(true);
+    } else {
+      // User is signed in and has creator subscription, navigate to creator
+      navigate('/creator');
     }
   };
 
@@ -84,8 +68,12 @@ const Home: React.FC = () => {
               className="bg-black text-white hover:bg-black/90 px-8 py-4 text-lg"
               onClick={handleCreateTrail}
             >
-              <Plus className="mr-2 h-5 w-5" />
-              Create a Trail
+              {!isAuthenticated || !canCreateTrails() ? (
+                <Lock className="mr-2 h-5 w-5" />
+              ) : (
+                <Plus className="mr-2 h-5 w-5" />
+              )}
+              {!isAuthenticated || !canCreateTrails() ? 'Upgrade to Create' : 'Create a Trail'}
             </Button>
           </div>
         </div>
@@ -94,6 +82,12 @@ const Home: React.FC = () => {
       <LoginModal 
         isOpen={showLoginModal} 
         onClose={() => setShowLoginModal(false)}
+      />
+      
+      <SubscriptionModal
+        open={showSubscriptionModal}
+        onOpenChange={setShowSubscriptionModal}
+        onSubscribe={startSubscription}
       />
     </>
   );

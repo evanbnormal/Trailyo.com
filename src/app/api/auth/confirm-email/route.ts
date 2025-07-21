@@ -31,9 +31,9 @@ export async function GET(request: NextRequest) {
 
         console.log('Email confirmed for:', email);
         
-        // Redirect to homepage with auto-login parameters
-        const baseUrl = process.env.BASE_URL || 'http://localhost:3001';
-        return NextResponse.redirect(new URL(`/?confirmed=true&email=${encodeURIComponent(email)}&autoLogin=true`, baseUrl));
+        // Redirect to homepage with success parameters
+        const baseUrl = process.env.BASE_URL || 'http://localhost:3000';
+        return NextResponse.redirect(new URL(`/?confirmed=true&email=${encodeURIComponent(email)}`, baseUrl));
         
       } catch (dbError) {
         console.error('Database error during confirmation:', dbError);
@@ -65,9 +65,9 @@ export async function GET(request: NextRequest) {
 
         console.log('Email confirmed for:', tokenData.email);
         
-        // Redirect to homepage with auto-login parameters
-        const baseUrl = process.env.BASE_URL || 'http://localhost:3001';
-        return NextResponse.redirect(new URL(`/?confirmed=true&email=${encodeURIComponent(tokenData.email)}&autoLogin=true`, baseUrl));
+        // Redirect to homepage with success parameters
+        const baseUrl = process.env.BASE_URL || 'http://localhost:3000';
+        return NextResponse.redirect(new URL(`/?confirmed=true&email=${encodeURIComponent(tokenData.email)}`, baseUrl));
         
       } catch (dbError) {
         console.error('Database error during confirmation:', dbError);

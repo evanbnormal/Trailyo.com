@@ -9,6 +9,8 @@ export async function POST(request: NextRequest) {
   try {
     const { customerId, email, setupIntentId } = await request.json();
 
+    console.log('Confirming subscription for customerId:', customerId, 'email:', email);
+
     if (!customerId || !email || !setupIntentId) {
       return NextResponse.json(
         { error: 'Customer ID, email, and setup intent ID are required' },

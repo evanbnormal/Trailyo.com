@@ -9,6 +9,8 @@ export async function POST(request: NextRequest) {
   try {
     const { customerId, email } = await request.json();
 
+    console.log('Creating subscription for customerId:', customerId, 'email:', email);
+
     if (!customerId || !email) {
       return NextResponse.json(
         { error: 'Customer ID and email are required' },

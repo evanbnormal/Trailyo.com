@@ -25,10 +25,14 @@ export async function POST(request: NextRequest) {
     if (existingCustomers.data.length > 0) {
       const customer = existingCustomers.data[0];
       
-      // Update customer metadata if userId is provided
-      if (userId && !customer.metadata?.userId) {
+      // Always update customer metadata with current userId
+      if (userId) {
         await stripe.customers.update(customer.id, {
-          metadata: { userId },
+          metadata: { 
+            ...customer.metadata,
+            userId,
+            source: 'trailyo_creator_subscription'
+          },
         });
       }
       

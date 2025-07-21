@@ -80,7 +80,7 @@ export async function POST(request: NextRequest) {
           // Send confirmation email first
           try {
             console.log('About to send confirmation email to', email);
-            const baseUrl = 'http://localhost:3001';
+            const baseUrl = process.env.BASE_URL || 'http://localhost:3000';
             const confirmationUrl = `${baseUrl}/api/auth/confirm-email?email=${encodeURIComponent(email)}`;
             await sgMail.send({
               to: email,
@@ -88,16 +88,16 @@ export async function POST(request: NextRequest) {
               subject: 'Confirm your email',
               text: 'Click the link to confirm your email!',
               html: `
-                <div style="background:#1f2937;padding:32px 0;text-align:center;font-family:sans-serif;">
-                  <img src="${baseUrl}/Logo%20White.svg" alt="Trailyo" style="height:48px;margin-bottom:24px;filter:brightness(0) invert(1);" />
-                  <h2 style="color:#fff;margin-bottom:16px;font-size:24px;">Confirm your email</h2>
-                  <p style="color:#d1d5db;margin-bottom:32px;font-size:16px;">
+                <div style="background:#fff;padding:32px 0;text-align:center;font-family:sans-serif;">
+                  <img src="${baseUrl}/Logo%20Black.svg" alt="Trailyo" style="height:48px;margin-bottom:24px;" />
+                  <h2 style="color:#111;margin-bottom:16px;font-size:24px;">Confirm your email</h2>
+                  <p style="color:#444;margin-bottom:32px;font-size:16px;">
                     Click the button below to verify your email and activate your account.
                   </p>
-                  <a href="${confirmationUrl}" style="display:inline-block;padding:12px 32px;background:#fbbf24;color:#1f2937;text-decoration:none;border-radius:6px;font-weight:bold;font-size:16px;">
+                  <a href="${confirmationUrl}" style="display:inline-block;padding:12px 32px;background:#fbbf24;color:#111;text-decoration:none;border-radius:6px;font-weight:bold;font-size:16px;">
                     Confirm Email
                   </a>
-                  <p style="color:#9ca3af;margin-top:32px;font-size:12px;">
+                  <p style="color:#888;margin-top:32px;font-size:12px;">
                     If you did not sign up for Trailyo, you can ignore this email.
                   </p>
                 </div>

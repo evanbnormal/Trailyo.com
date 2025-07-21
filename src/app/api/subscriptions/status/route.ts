@@ -9,6 +9,7 @@ export async function GET(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url);
     const userId = searchParams.get('userId');
+    const userEmail = searchParams.get('email');
 
     if (!userId) {
       return NextResponse.json(
@@ -22,18 +23,37 @@ export async function GET(request: NextRequest) {
     // and look it up by user ID. For now, we'll search by email or user ID.
     
     try {
-      // Get the user's email from the auth context or database
-      // For now, we'll try to find customers by searching for the user ID in metadata
+      // First, try to find customers by user ID in metadata
       const customers = await stripe.customers.list({
         limit: 100,
       });
 
-      // Find all customers that match this user ID
+      console.log('Checking subscription status for userId:', userId);
+      console.log('User email from request:', userEmail);
+      console.log('Total customers found:', customers.data.length);
+
+      // Log all customers for debugging
+      customers.data.forEach(c => {
+        console.log('All customer:', { 
+          id: c.id, 
+          email: c.email, 
+          metadata: c.metadata,
+          userId: c.metadata?.userId 
+        });
+      });
+
+      // Find all customers that match this user ID or email
       const matchingCustomers = customers.data.filter(c => 
         c.metadata?.userId === userId || 
+        c.email === userEmail ||
         c.email?.includes(userId) ||
         c.id === userId
       );
+
+      console.log('Matching customers found:', matchingCustomers.length);
+      matchingCustomers.forEach(c => {
+        console.log('Matching customer:', { id: c.id, email: c.email, metadata: c.metadata });
+      });
 
       // Check each matching customer for active subscriptions
       for (const customer of matchingCustomers) {

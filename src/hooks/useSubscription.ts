@@ -19,10 +19,21 @@ export const useSubscription = () => {
     }
   }, [user?.id]);
 
+  // Force refresh subscription status every 30 seconds for logged-in users
+  useEffect(() => {
+    if (!user?.id) return;
+
+    const interval = setInterval(() => {
+      loadSubscriptionStatus();
+    }, 30000); // 30 seconds
+
+    return () => clearInterval(interval);
+  }, [user?.id]);
+
   const loadSubscriptionStatus = async () => {
     try {
       setIsLoading(true);
-      const status = await SubscriptionService.getSubscriptionStatus(user!.id);
+      const status = await SubscriptionService.getSubscriptionStatus(user!.id, user!.email);
       setSubscriptionStatus(status);
     } catch (error) {
       console.error('Failed to load subscription status:', error);

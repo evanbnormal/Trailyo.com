@@ -70,9 +70,14 @@ export class SubscriptionService {
     }
   }
 
-  static async getSubscriptionStatus(userId: string): Promise<SubscriptionStatus> {
+  static async getSubscriptionStatus(userId: string, email?: string): Promise<SubscriptionStatus> {
     try {
-      const response = await fetch(`/api/subscriptions/status?userId=${userId}`);
+      const params = new URLSearchParams({ userId });
+      if (email) {
+        params.append('email', email);
+      }
+      
+      const response = await fetch(`/api/subscriptions/status?${params}`);
       
       if (!response.ok) {
         throw new Error('Failed to get subscription status');
