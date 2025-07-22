@@ -33,10 +33,30 @@ export const useSubscription = () => {
   const loadSubscriptionStatus = async () => {
     try {
       setIsLoading(true);
+      
+      // First, try to load from localStorage for immediate display
+      const storedStatus = localStorage.getItem(`subscription_${user!.id}`);
+      if (storedStatus) {
+        const parsedStatus = JSON.parse(storedStatus);
+        setSubscriptionStatus(parsedStatus);
+      }
+      
+      // Then fetch fresh data from server
       const status = await SubscriptionService.getSubscriptionStatus(user!.id, user!.email);
       setSubscriptionStatus(status);
+      
+      // Store the fresh data in localStorage
+      localStorage.setItem(`subscription_${user!.id}`, JSON.stringify(status));
+      
     } catch (error) {
       console.error('Failed to load subscription status:', error);
+      
+      // Fallback to localStorage if server fails
+      const storedStatus = localStorage.getItem(`subscription_${user!.id}`);
+      if (storedStatus) {
+        const parsedStatus = JSON.parse(storedStatus);
+        setSubscriptionStatus(parsedStatus);
+      }
     } finally {
       setIsLoading(false);
     }

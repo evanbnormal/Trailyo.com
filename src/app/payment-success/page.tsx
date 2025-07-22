@@ -67,6 +67,15 @@ export default function PaymentSuccessPage() {
         status: 'succeeded'
       }));
 
+      // Store the subscription status for persistence
+      const subscriptionStatus = {
+        isSubscribed: true,
+        isTrialing: true,
+        trialEnd: Math.floor(Date.now() / 1000) + (14 * 24 * 60 * 60), // 14 days from now
+        status: 'trialing'
+      };
+      localStorage.setItem(`subscription_${user.id}`, JSON.stringify(subscriptionStatus));
+
       toast({
         title: "Subscription Created!",
         description: "Your Creator subscription has been activated successfully.",

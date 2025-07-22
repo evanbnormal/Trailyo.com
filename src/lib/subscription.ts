@@ -91,7 +91,14 @@ export class SubscriptionService {
         throw new Error('Failed to get subscription status');
       }
 
-      return await response.json();
+      const status = await response.json();
+      
+      // Store the status in localStorage for persistence
+      if (typeof window !== 'undefined') {
+        localStorage.setItem(`subscription_${userId}`, JSON.stringify(status));
+      }
+
+      return status;
     } catch (error) {
       console.error('Get subscription status error:', error);
       // Default to free tier for new users
