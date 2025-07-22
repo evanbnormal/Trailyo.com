@@ -11,6 +11,7 @@ import Home from "@/pages/Home";
 import LearnerView from "@/pages/LearnerView";
 import CreatorView from "@/pages/CreatorView";
 import Profile from "@/pages/Profile";
+import Settings from "@/pages/Settings";
 import PublishConfirmation from "@/pages/PublishConfirmation";
 import TrailAnalytics from "@/pages/TrailAnalytics";
 import NotFound from "@/pages/NotFound";
@@ -35,6 +36,7 @@ export default function AppComponent() {
                 <Route path="/test-trail" element={<LearnerView />} />
                 <Route path="/creator" element={<CreatorView />} />
                 <Route path="/profile" element={<Profile />} />
+                <Route path="/settings" element={<Settings />} />
                 <Route path="/reset-password" element={<ResetPassword />} />
                 <Route path="/publish-confirmation" element={<PublishConfirmation />} />
                 <Route path="/trail-analytics/:trailId" element={<TrailAnalytics />} />

@@ -1,17 +1,17 @@
 'use client';
 
 import { useState } from 'react';
-import { useAuth } from '../../contexts/AuthContext';
-import { useSubscription } from '../../hooks/useSubscription';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../../components/ui/card';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '../../components/ui/tabs';
-import { Button } from '../../components/ui/button';
-import { Input } from '../../components/ui/input';
-import { Label } from '../../components/ui/label';
-import { Separator } from '../../components/ui/separator';
-import { Badge } from '../../components/ui/badge';
+import { useAuth } from '../contexts/AuthContext';
+import { useSubscription } from '../hooks/useSubscription';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../components/ui/card';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '../components/ui/tabs';
+import { Button } from '../components/ui/button';
+import { Input } from '../components/ui/input';
+import { Label } from '../components/ui/label';
+import { Separator } from '../components/ui/separator';
+import { Badge } from '../components/ui/badge';
 import { Crown, Gift, CreditCard, User, Shield, Settings } from 'lucide-react';
-import { useToast } from '../../hooks/use-toast';
+import { useToast } from '../hooks/use-toast';
 
 export default function SettingsPage() {
   const { user, updateUser } = useAuth();
