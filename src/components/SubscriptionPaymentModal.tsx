@@ -19,14 +19,14 @@ interface SubscriptionPaymentModalProps {
   onOpenChange: (open: boolean) => void;
   clientSecret: string;
   setupIntentId: string;
-  onSuccess: () => void;
+  onSuccess: () => void | Promise<void>;
   onError: (error: string) => void;
 }
 
 const PaymentForm: React.FC<{
   setupIntentId: string;
   clientSecret: string;
-  onSuccess: () => void;
+  onSuccess: () => void | Promise<void>;
   onError: (error: string) => void;
 }> = ({ setupIntentId, clientSecret, onSuccess, onError }) => {
   const stripe = useStripe();
@@ -94,7 +94,7 @@ const PaymentForm: React.FC<{
       await SubscriptionService.confirmSubscription(customerId, user.email, setupIntentId);
       
       console.log('Subscription created successfully');
-      onSuccess();
+      await onSuccess();
     } catch (error) {
       console.error('Subscription error:', error);
       onError('Failed to create subscription. Please try again.');

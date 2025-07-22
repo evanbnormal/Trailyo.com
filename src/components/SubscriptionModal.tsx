@@ -23,7 +23,7 @@ const SubscriptionModal: React.FC<SubscriptionModalProps> = ({
   const [showPaymentModal, setShowPaymentModal] = useState(false);
   const [clientSecret, setClientSecret] = useState<string>('');
   const [setupIntentId, setSetupIntentId] = useState<string>('');
-  const { startSubscription } = useSubscription();
+  const { startSubscription, loadSubscriptionStatus } = useSubscription();
   const { toast } = useToast();
 
   const handleSubscribe = async () => {
@@ -45,8 +45,15 @@ const SubscriptionModal: React.FC<SubscriptionModalProps> = ({
     }
   };
 
-  const handlePaymentSuccess = () => {
+  const handlePaymentSuccess = async () => {
     setShowPaymentModal(false);
+    
+    // Small delay to allow Stripe webhook to process
+    await new Promise(resolve => setTimeout(resolve, 1000));
+    
+    // Immediately refresh subscription status
+    await loadSubscriptionStatus();
+    
     onSubscribe();
     toast({
       title: "Success!",
