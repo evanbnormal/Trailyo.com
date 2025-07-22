@@ -1,6 +1,10 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { SubscriptionService, SubscriptionStatus } from '../lib/subscription';
+
+// Global state to prevent multiple intervals
+let globalInterval: NodeJS.Timeout | null = null;
+let globalSubscribers = new Set<(status: SubscriptionStatus) => void>();
 
 export const useSubscription = () => {
   const { user } = useAuth();
@@ -10,6 +14,23 @@ export const useSubscription = () => {
     status: 'inactive',
   });
   const [isLoading, setIsLoading] = useState(true);
+  const subscriberRef = useRef<(status: SubscriptionStatus) => void>();
+
+  // Create a subscriber function for this component
+  useEffect(() => {
+    subscriberRef.current = (status: SubscriptionStatus) => {
+      setSubscriptionStatus(status);
+    };
+    
+    // Add this component to global subscribers
+    globalSubscribers.add(subscriberRef.current);
+    
+    return () => {
+      if (subscriberRef.current) {
+        globalSubscribers.delete(subscriberRef.current);
+      }
+    };
+  }, []);
 
   useEffect(() => {
     if (user?.id) {
@@ -19,15 +40,26 @@ export const useSubscription = () => {
     }
   }, [user?.id]);
 
-  // Refresh subscription status every 60 seconds for logged-in users
+  // Only start global interval if not already running
   useEffect(() => {
     if (!user?.id) return;
 
-    const interval = setInterval(() => {
-      loadSubscriptionStatus();
-    }, 60000); // 60 seconds (1 minute) - reduced frequency
+    // Clear existing interval if user changed
+    if (globalInterval) {
+      clearInterval(globalInterval);
+      globalInterval = null;
+    }
 
-    return () => clearInterval(interval);
+    // Start global interval only once
+    if (!globalInterval) {
+      globalInterval = setInterval(() => {
+        loadSubscriptionStatus();
+      }, 300000); // 5 minutes - much less frequent
+    }
+
+    return () => {
+      // Don't clear interval on component unmount - let it run globally
+    };
   }, [user?.id]);
 
   const loadSubscriptionStatus = async () => {
@@ -49,6 +81,9 @@ export const useSubscription = () => {
       if (status.isSubscribed || status.isTrialing) {
         setSubscriptionStatus(status);
         localStorage.setItem(`subscription_${user!.id}`, JSON.stringify(status));
+        
+        // Notify all subscribers of the new status
+        globalSubscribers.forEach(subscriber => subscriber(status));
       } else {
         // If server says no subscription, but we have a stored subscription, keep the stored one
         const storedStatus = localStorage.getItem(`subscription_${user!.id}`);
@@ -63,6 +98,9 @@ export const useSubscription = () => {
         // Only update if we don't have a stored subscription
         setSubscriptionStatus(status);
         localStorage.setItem(`subscription_${user!.id}`, JSON.stringify(status));
+        
+        // Notify all subscribers of the new status
+        globalSubscribers.forEach(subscriber => subscriber(status));
       }
       
     } catch (error) {
