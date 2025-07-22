@@ -6,6 +6,7 @@ import { Check, Star, Zap, Users, BarChart3, Crown, X } from 'lucide-react';
 import SubscriptionPaymentModal from './SubscriptionPaymentModal';
 import { useSubscription } from '../hooks/useSubscription';
 import { useToast } from '../hooks/use-toast';
+import { useAuth } from '../contexts/AuthContext';
 
 interface SubscriptionModalProps {
   open: boolean;
@@ -25,10 +26,16 @@ const SubscriptionModal: React.FC<SubscriptionModalProps> = ({
   const [setupIntentId, setSetupIntentId] = useState<string>('');
   const { startSubscription, loadSubscriptionStatus } = useSubscription();
   const { toast } = useToast();
+  const { user } = useAuth();
 
   const handleSubscribe = async () => {
     setIsLoading(true);
     try {
+      // Store user data for payment success page
+      if (user) {
+        localStorage.setItem('userData', JSON.stringify(user));
+      }
+      
       const { clientSecret: secret, setupIntentId: intentId } = await startSubscription();
       setClientSecret(secret);
       setSetupIntentId(intentId);

@@ -62,7 +62,7 @@ const PaymentForm: React.FC<{
         elements,
         clientSecret,
         confirmParams: {
-          return_url: window.location.href, // Return to current page
+          return_url: `${window.location.origin}/payment-success`,
         },
       });
 

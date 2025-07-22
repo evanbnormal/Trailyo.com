@@ -11,10 +11,94 @@ export default function PaymentSuccessPage() {
   const router = useRouter();
   const [isProcessing, setIsProcessing] = useState(true);
   const paymentIntent = searchParams.get('payment_intent');
+  const setupIntent = searchParams.get('setup_intent');
   const redirectStatus = searchParams.get('redirect_status');
 
+  const handleSubscriptionSuccess = async (setupIntentId: string) => {
+    try {
+      // Get user data from localStorage or context
+      const userData = localStorage.getItem('userData');
+      if (!userData) {
+        throw new Error('User data not found');
+      }
+      
+      const user = JSON.parse(userData);
+      
+      // Get customer ID
+      const customerResponse = await fetch('/api/stripe/create-customer', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ email: user.email }),
+      });
+
+      if (!customerResponse.ok) {
+        throw new Error('Failed to get customer ID');
+      }
+
+      const { customerId } = await customerResponse.json();
+      
+      // Create the subscription
+      const result = await fetch('/api/subscriptions/confirm', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          customerId,
+          email: user.email,
+          setupIntentId,
+          userId: user.id,
+        }),
+      });
+
+      if (!result.ok) {
+        throw new Error('Failed to create subscription');
+      }
+
+      const subscriptionData = await result.json();
+      
+      // Store subscription success
+      localStorage.setItem('lastSubscriptionSuccess', JSON.stringify({
+        setupIntentId,
+        subscriptionId: subscriptionData.subscriptionId,
+        timestamp: Date.now(),
+        status: 'succeeded'
+      }));
+
+      toast({
+        title: "Subscription Created!",
+        description: "Your Creator subscription has been activated successfully.",
+      });
+
+      setIsProcessing(false);
+      
+      // Redirect to home after a short delay
+      setTimeout(() => {
+        router.push('/');
+      }, 2000);
+      
+    } catch (error) {
+      console.error('Subscription creation error:', error);
+      toast({
+        title: "Subscription Error",
+        description: "Failed to create subscription. Please contact support.",
+        variant: "destructive",
+      });
+      
+      setIsProcessing(false);
+      setTimeout(() => {
+        router.push('/');
+      }, 2000);
+    }
+  };
+
   useEffect(() => {
-    if (paymentIntent && redirectStatus === 'succeeded') {
+    if (setupIntent && redirectStatus === 'succeeded') {
+      // Setup intent was successful - create subscription
+      handleSubscriptionSuccess(setupIntent);
+    } else if (paymentIntent && redirectStatus === 'succeeded') {
       // Payment was successful
       setIsProcessing(false);
       
@@ -41,7 +125,7 @@ export default function PaymentSuccessPage() {
           router.push('/');
         }
       }, 2000);
-    } else if (paymentIntent && redirectStatus === 'failed') {
+    } else if ((paymentIntent || setupIntent) && redirectStatus === 'failed') {
       // Payment failed
       setIsProcessing(false);
       toast({
