@@ -1,8 +1,7 @@
 'use client'
 
 import React, { useState, useEffect } from 'react';
-import Link from 'next/link';
-import { useRouter } from 'next/navigation';
+import { Link, useNavigate } from 'react-router-dom';
 import { User, LogOut, Settings, Crown, Gift, Menu } from 'lucide-react';
 import { Button } from './ui/button';
 import { Avatar, AvatarFallback } from './ui/avatar';
@@ -13,7 +12,7 @@ import LoginModal from './LoginModal';
 import SubscriptionModal from './SubscriptionModal';
 
 const Navigation: React.FC = () => {
-  const router = useRouter();
+  const navigate = useNavigate();
   const { user, isAuthenticated, logout } = useAuth();
   const { subscriptionStatus, canCreateTrails, startSubscription } = useSubscription();
   const [showLoginModal, setShowLoginModal] = useState(false);
@@ -22,7 +21,7 @@ const Navigation: React.FC = () => {
   const handleLogout = () => {
     logout(() => {
       // Redirect to home page after logout
-      router.push('/');
+      navigate('/');
     });
   };
 
@@ -39,7 +38,7 @@ const Navigation: React.FC = () => {
     <>
       <nav className="bg-black text-white px-6 py-4 shadow-md">
         <div className="max-w-7xl mx-auto flex justify-between items-center">
-          <Link href="/" className="flex items-center">
+          <Link to="/" className="flex items-center">
             <img 
               src="/Logo White.svg" 
               alt="Trailyo" 
@@ -76,7 +75,7 @@ const Navigation: React.FC = () => {
                   </div>
                   
                   <DropdownMenuItem asChild>
-                    <Link href="/profile" className="cursor-pointer">
+                    <Link to="/profile" className="cursor-pointer">
                       <User className="h-4 w-4 mr-2" />
                       Profile
                     </Link>
@@ -95,7 +94,7 @@ const Navigation: React.FC = () => {
                   <DropdownMenuSeparator />
                   
                   <DropdownMenuItem asChild>
-                    <Link href="/settings" className="cursor-pointer">
+                    <Link to="/settings" className="cursor-pointer">
                       <Settings className="h-4 w-4 mr-2" />
                       Settings
                     </Link>
