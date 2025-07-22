@@ -452,8 +452,8 @@ const Profile: React.FC = () => {
           <p className="text-gray-600 mb-6">
             {canCreateTrails() ? (
               <>
-                <Crown className="inline-block h-4 w-4 mr-1 text-yellow-500" />
-                Creator
+                <Crown className="inline-block h-4 w-4 mr-1 text-amber-500" />
+                <span className="text-amber-600 font-medium">Creator</span>
                 {subscriptionStatus.isTrialing && (
                   <span className="text-xs text-blue-600 bg-blue-100 px-2 py-1 rounded-full ml-2">
                     Trial
@@ -467,6 +467,17 @@ const Profile: React.FC = () => {
               </>
             )}
           </p>
+          
+          {/* Trial Days Remaining */}
+          {subscriptionStatus.isTrialing && subscriptionStatus.trialEnd && (
+            <p className="text-sm text-blue-600 mb-6">
+              {(() => {
+                const now = Math.floor(Date.now() / 1000);
+                const daysLeft = Math.ceil((subscriptionStatus.trialEnd - now) / (24 * 60 * 60));
+                return `${daysLeft} days left in trial`;
+              })()}
+            </p>
+          )}
           
           {/* Create New Trail Button */}
           <Link to="/creator">

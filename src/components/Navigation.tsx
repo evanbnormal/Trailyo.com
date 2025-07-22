@@ -63,8 +63,8 @@ const Navigation: React.FC = () => {
                     <div className="flex items-center gap-2 mt-2">
                       {canCreateTrails() ? (
                         <>
-                          <Crown className="h-4 w-4 text-yellow-500" />
-                          <span className="text-xs text-yellow-600 font-medium">Creator</span>
+                          <Crown className="h-4 w-4 text-amber-500" />
+                          <span className="text-xs text-amber-600 font-medium">Creator</span>
                           {subscriptionStatus.isTrialing && (
                             <span className="text-xs text-blue-600 bg-blue-100 px-2 py-1 rounded-full">
                               Trial
