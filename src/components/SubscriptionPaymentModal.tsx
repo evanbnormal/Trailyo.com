@@ -91,7 +91,9 @@ const PaymentForm: React.FC<{
       console.log('Customer ID retrieved:', customerId);
 
       // Create the subscription
-      await SubscriptionService.confirmSubscription(customerId, user.email, setupIntentId);
+      console.log('About to create subscription with:', { customerId, email: user.email, setupIntentId });
+      const result = await SubscriptionService.confirmSubscription(customerId, user.email, setupIntentId);
+      console.log('Subscription creation result:', result);
       
       console.log('Subscription created successfully');
       await onSuccess();

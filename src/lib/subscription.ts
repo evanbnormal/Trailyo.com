@@ -51,6 +51,8 @@ export class SubscriptionService {
 
   static async confirmSubscription(customerId: string, email: string, setupIntentId: string): Promise<{ subscriptionId: string; status: string }> {
     try {
+      console.log('SubscriptionService.confirmSubscription called with:', { customerId, email, setupIntentId });
+      
       const response = await fetch('/api/subscriptions/confirm', {
         method: 'POST',
         headers: {
@@ -59,11 +61,17 @@ export class SubscriptionService {
         body: JSON.stringify({ customerId, email, setupIntentId }),
       });
 
+      console.log('Subscription confirm response status:', response.status);
+      
       if (!response.ok) {
-        throw new Error('Failed to confirm subscription');
+        const errorText = await response.text();
+        console.error('Subscription confirm error response:', errorText);
+        throw new Error(`Failed to confirm subscription: ${errorText}`);
       }
 
-      return await response.json();
+      const result = await response.json();
+      console.log('Subscription confirm result:', result);
+      return result;
     } catch (error) {
       console.error('Subscription confirmation error:', error);
       throw error;

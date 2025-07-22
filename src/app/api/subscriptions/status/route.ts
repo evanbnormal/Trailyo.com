@@ -57,18 +57,56 @@ export async function GET(request: NextRequest) {
 
       // Check each matching customer for active subscriptions
       for (const customer of matchingCustomers) {
-        const subscriptions = await stripe.subscriptions.list({
+        console.log('Checking subscriptions for customer:', customer.id);
+        
+        // First check for active subscriptions
+        const activeSubscriptions = await stripe.subscriptions.list({
           customer: customer.id,
           status: 'active',
         });
+        
+        console.log('Active subscriptions found:', activeSubscriptions.data.length);
+        
+        // Also check for trialing subscriptions
+        const trialingSubscriptions = await stripe.subscriptions.list({
+          customer: customer.id,
+          status: 'trialing',
+        });
+        
+        console.log('Trialing subscriptions found:', trialingSubscriptions.data.length);
+        
+        // Check all subscriptions for this customer
+        const allSubscriptions = await stripe.subscriptions.list({
+          customer: customer.id,
+        });
+        
+        console.log('Total subscriptions for customer:', allSubscriptions.data.length);
+        allSubscriptions.data.forEach(sub => {
+          console.log('Subscription:', { 
+            id: sub.id, 
+            status: sub.status, 
+            trial_end: sub.trial_end
+          });
+        });
 
-        if (subscriptions.data.length > 0) {
-          const subscription = subscriptions.data[0];
+        // Return true if we have any subscriptions (active, trialing, past_due, etc.)
+        if (allSubscriptions.data.length > 0) {
+          const subscription = allSubscriptions.data[0];
           const isTrialing = subscription.status === 'trialing';
           const trialEnd = subscription.trial_end;
+          
+          // Consider any subscription as "subscribed" except canceled or incomplete
+          const isSubscribed = !['canceled', 'incomplete', 'incomplete_expired'].includes(subscription.status);
+
+          console.log('Returning subscription status:', {
+            isSubscribed,
+            isTrialing,
+            trialEnd,
+            status: subscription.status,
+          });
 
           return NextResponse.json({
-            isSubscribed: true,
+            isSubscribed,
             isTrialing,
             trialEnd,
             status: subscription.status,
