@@ -93,9 +93,24 @@ export class SubscriptionService {
 
       const status = await response.json();
       
-      // Store the status in localStorage for persistence
+      // Only store the status in localStorage if it's a valid subscription
+      // This prevents overwriting a stored subscription with "no subscription" from server
       if (typeof window !== 'undefined') {
-        localStorage.setItem(`subscription_${userId}`, JSON.stringify(status));
+        if (status.isSubscribed || status.isTrialing) {
+          localStorage.setItem(`subscription_${userId}`, JSON.stringify(status));
+        } else {
+          // Check if we already have a stored subscription
+          const storedStatus = localStorage.getItem(`subscription_${userId}`);
+          if (storedStatus) {
+            const parsedStatus = JSON.parse(storedStatus);
+            if (parsedStatus.isSubscribed || parsedStatus.isTrialing) {
+              // Return the stored subscription instead of the server response
+              return parsedStatus;
+            }
+          }
+          // Only store if we don't have a stored subscription
+          localStorage.setItem(`subscription_${userId}`, JSON.stringify(status));
+        }
       }
 
       return status;

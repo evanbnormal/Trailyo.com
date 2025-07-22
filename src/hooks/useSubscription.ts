@@ -43,10 +43,27 @@ export const useSubscription = () => {
       
       // Then fetch fresh data from server
       const status = await SubscriptionService.getSubscriptionStatus(user!.id, user!.email);
-      setSubscriptionStatus(status);
       
-      // Store the fresh data in localStorage
-      localStorage.setItem(`subscription_${user!.id}`, JSON.stringify(status));
+      // Only update localStorage if server returns a valid subscription
+      // This prevents overwriting a stored subscription with "no subscription" from server
+      if (status.isSubscribed || status.isTrialing) {
+        setSubscriptionStatus(status);
+        localStorage.setItem(`subscription_${user!.id}`, JSON.stringify(status));
+      } else {
+        // If server says no subscription, but we have a stored subscription, keep the stored one
+        const storedStatus = localStorage.getItem(`subscription_${user!.id}`);
+        if (storedStatus) {
+          const parsedStatus = JSON.parse(storedStatus);
+          if (parsedStatus.isSubscribed || parsedStatus.isTrialing) {
+            // Keep the stored subscription status
+            setSubscriptionStatus(parsedStatus);
+            return; // Don't overwrite localStorage
+          }
+        }
+        // Only update if we don't have a stored subscription
+        setSubscriptionStatus(status);
+        localStorage.setItem(`subscription_${user!.id}`, JSON.stringify(status));
+      }
       
     } catch (error) {
       console.error('Failed to load subscription status:', error);
