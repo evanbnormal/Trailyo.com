@@ -19,13 +19,13 @@ export const useSubscription = () => {
     }
   }, [user?.id]);
 
-  // Force refresh subscription status every 10 seconds for logged-in users
+  // Refresh subscription status every 60 seconds for logged-in users
   useEffect(() => {
     if (!user?.id) return;
 
     const interval = setInterval(() => {
       loadSubscriptionStatus();
-    }, 10000); // 10 seconds - more frequent updates
+    }, 60000); // 60 seconds (1 minute) - reduced frequency
 
     return () => clearInterval(interval);
   }, [user?.id]);

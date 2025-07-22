@@ -449,7 +449,7 @@ const Profile: React.FC = () => {
             </span>
           </div>
           <h1 className="text-3xl font-bold text-gray-900 mb-2">{user?.name || 'User'}</h1>
-          <p className="text-gray-600 mb-6">
+          <p className="text-gray-600 mb-2">
             {canCreateTrails() ? (
               <>
                 <Crown className="inline-block h-4 w-4 mr-1 text-amber-500" />

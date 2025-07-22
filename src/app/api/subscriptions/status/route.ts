@@ -19,10 +19,8 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    console.log('Checking subscription status for userId:', userId);
-
     // Database lookup temporarily disabled due to Prisma client issue
-    console.log('TODO: Check database for subscription when Prisma client is fixed');
+    // console.log('TODO: Check database for subscription when Prisma client is fixed');
     
     try {
       // First, try to find customers by user ID in metadata
@@ -30,19 +28,19 @@ export async function GET(request: NextRequest) {
         limit: 100,
       });
 
-      console.log('Checking subscription status for userId:', userId);
-      console.log('User email from request:', userEmail);
-      console.log('Total customers found:', customers.data.length);
+      // console.log('Checking subscription status for userId:', userId);
+      // console.log('User email from request:', userEmail);
+      // console.log('Total customers found:', customers.data.length);
 
-      // Log all customers for debugging
-      customers.data.forEach(c => {
-        console.log('All customer:', { 
-          id: c.id, 
-          email: c.email, 
-          metadata: c.metadata,
-          userId: c.metadata?.userId 
-        });
-      });
+      // Log all customers for debugging (commented out to reduce spam)
+      // customers.data.forEach(c => {
+      //   console.log('All customer:', { 
+      //     id: c.id, 
+      //     email: c.email, 
+      //     metadata: c.metadata,
+      //     userId: c.metadata?.userId 
+      //   });
+      // });
 
       // Find all customers that match this user ID or email
       const matchingCustomers = customers.data.filter(c => 
@@ -52,28 +50,28 @@ export async function GET(request: NextRequest) {
         c.id === userId
       );
 
-      console.log('Matching customers found:', matchingCustomers.length);
-      matchingCustomers.forEach(c => {
-        console.log('Matching customer:', { id: c.id, email: c.email, metadata: c.metadata });
-      });
+      // console.log('Matching customers found:', matchingCustomers.length);
+      // matchingCustomers.forEach(c => {
+      //   console.log('Matching customer:', { id: c.id, email: c.email, metadata: c.metadata });
+      // });
 
       // Check each matching customer for subscriptions
       for (const customer of matchingCustomers) {
-        console.log('Checking subscriptions for customer:', customer.id);
+        // console.log('Checking subscriptions for customer:', customer.id);
         
         // Check all subscriptions for this customer
         const allSubscriptions = await stripe.subscriptions.list({
           customer: customer.id,
         });
         
-        console.log('Total subscriptions for customer:', allSubscriptions.data.length);
-        allSubscriptions.data.forEach(sub => {
-          console.log('Subscription:', { 
-            id: sub.id, 
-            status: sub.status, 
-            trial_end: sub.trial_end
-          });
-        });
+        // console.log('Total subscriptions for customer:', allSubscriptions.data.length);
+        // allSubscriptions.data.forEach(sub => {
+        //   console.log('Subscription:', { 
+        //     id: sub.id, 
+        //     status: sub.status, 
+        //     trial_end: sub.trial_end
+        //   });
+        // });
 
         // Return true if we have any valid subscriptions
         if (allSubscriptions.data.length > 0) {
@@ -84,12 +82,12 @@ export async function GET(request: NextRequest) {
           // Consider any subscription as "subscribed" except canceled or incomplete
           const isSubscribed = !['canceled', 'incomplete', 'incomplete_expired'].includes(subscription.status);
 
-          console.log('Returning subscription status:', {
-            isSubscribed,
-            isTrialing,
-            trialEnd,
-            status: subscription.status,
-          });
+          // console.log('Returning subscription status:', {
+          //   isSubscribed,
+          //   isTrialing,
+          //   trialEnd,
+          //   status: subscription.status,
+          // });
 
           return NextResponse.json({
             isSubscribed,
