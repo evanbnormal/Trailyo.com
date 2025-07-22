@@ -94,9 +94,11 @@ const Navigation: React.FC = () => {
                   
                   <DropdownMenuSeparator />
                   
-                  <DropdownMenuItem className="cursor-pointer">
-                    <Settings className="h-4 w-4 mr-2" />
-                    Settings
+                  <DropdownMenuItem asChild>
+                    <Link to="/settings" className="cursor-pointer">
+                      <Settings className="h-4 w-4 mr-2" />
+                      Settings
+                    </Link>
                   </DropdownMenuItem>
                   
                   <DropdownMenuItem 

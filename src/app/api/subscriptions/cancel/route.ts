@@ -1,33 +1,59 @@
 import { NextRequest, NextResponse } from 'next/server';
-import Stripe from 'stripe';
-
-const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
-  apiVersion: '2025-06-30.basil',
-});
+import { db } from '../../../../lib/db';
+import { stripe } from '../../../../lib/stripe';
 
 export async function POST(request: NextRequest) {
   try {
-    const { subscriptionId } = await request.json();
+    const { userId } = await request.json();
 
-    if (!subscriptionId) {
+    if (!userId) {
       return NextResponse.json(
-        { error: 'Subscription ID is required' },
+        { error: 'User ID is required' },
         { status: 400 }
       );
     }
 
-    // Cancel the subscription at the end of the current period
-    const subscription = await stripe.subscriptions.update(subscriptionId, {
-      cancel_at_period_end: true,
+    // Get subscription from database
+    const dbSubscription = await db.subscription.findUnique({
+      where: { userId },
+    });
+
+    if (!dbSubscription) {
+      return NextResponse.json(
+        { error: 'No subscription found for this user' },
+        { status: 404 }
+      );
+    }
+
+    // Cancel subscription in Stripe
+    const canceledSubscription = await stripe.subscriptions.update(
+      dbSubscription.stripeSubscriptionId,
+      { cancel_at_period_end: true }
+    );
+
+    // Update subscription in database
+    await db.subscription.update({
+      where: { userId },
+      data: {
+        status: 'canceled',
+        canceledAt: new Date(),
+        updatedAt: new Date(),
+      },
+    });
+
+    console.log('Subscription canceled successfully:', {
+      userId,
+      stripeSubscriptionId: dbSubscription.stripeSubscriptionId,
+      status: canceledSubscription.status,
     });
 
     return NextResponse.json({
       success: true,
+      message: 'Subscription canceled successfully',
       subscription: {
-        id: subscription.id,
-        status: subscription.status,
-        cancelAtPeriodEnd: subscription.cancel_at_period_end,
-        currentPeriodEnd: (subscription as any).current_period_end,
+        id: dbSubscription.id,
+        status: 'canceled',
+        canceledAt: new Date(),
       },
     });
   } catch (error) {
