@@ -19,8 +19,28 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    // Database lookup temporarily disabled due to Prisma client issue
-    // console.log('TODO: Check database for subscription when Prisma client is fixed');
+    // Check database first for subscription status
+    try {
+      const dbSubscription = await db.subscription.findUnique({
+        where: { userId },
+        include: { user: true }
+      });
+
+      if (dbSubscription) {
+        const isTrialing = dbSubscription.status === 'trialing';
+        const isSubscribed = ['active', 'trialing'].includes(dbSubscription.status);
+        
+        return NextResponse.json({
+          isSubscribed,
+          isTrialing,
+          trialEnd: dbSubscription.trialEnd ? Math.floor(dbSubscription.trialEnd.getTime() / 1000) : null,
+          status: dbSubscription.status,
+        });
+      }
+    } catch (dbError) {
+      console.error('Database lookup error:', dbError);
+      // Continue to Stripe lookup if database fails
+    }
     
     try {
       // First, try to find customers by user ID in metadata

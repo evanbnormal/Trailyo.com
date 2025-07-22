@@ -66,9 +66,34 @@ export async function POST(request: NextRequest) {
 
     console.log('Subscription created successfully:', subscription.id);
 
-    // Save subscription to database (temporarily disabled due to Prisma client issue)
-    console.log('Subscription created in Stripe:', subscription.id);
-    console.log('TODO: Save subscription to database when Prisma client is fixed');
+    // Save subscription to database
+    try {
+      const dbSubscription = await db.subscription.upsert({
+        where: { userId },
+        update: {
+          stripeCustomerId: customerId,
+          stripeSubscriptionId: subscription.id,
+          status: subscription.status,
+          trialEnd: subscription.trial_end ? new Date(subscription.trial_end * 1000) : null,
+          currentPeriodEnd: subscription.current_period_end ? new Date(subscription.current_period_end * 1000) : null,
+          updatedAt: new Date(),
+        },
+        create: {
+          userId,
+          stripeCustomerId: customerId,
+          stripeSubscriptionId: subscription.id,
+          status: subscription.status,
+          planType: 'creator',
+          trialEnd: subscription.trial_end ? new Date(subscription.trial_end * 1000) : null,
+          currentPeriodEnd: subscription.current_period_end ? new Date(subscription.current_period_end * 1000) : null,
+        },
+      });
+
+      console.log('Subscription saved to database:', dbSubscription.id);
+    } catch (dbError) {
+      console.error('Failed to save subscription to database:', dbError);
+      // Continue even if database save fails
+    }
 
     // Send welcome email (temporarily disabled - SendGrid API key not configured)
     console.log('TODO: Send welcome email when SendGrid API key is configured');
