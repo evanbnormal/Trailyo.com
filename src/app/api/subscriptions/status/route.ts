@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import Stripe from 'stripe';
+import { db } from '@/lib/db';
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
   apiVersion: '2025-06-30.basil',
@@ -18,9 +19,10 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    // For now, we'll check if there are any active subscriptions for this user
-    // In a real implementation, you'd store the Stripe customer ID in your user database
-    // and look it up by user ID. For now, we'll search by email or user ID.
+    console.log('Checking subscription status for userId:', userId);
+
+    // Database lookup temporarily disabled due to Prisma client issue
+    console.log('TODO: Check database for subscription when Prisma client is fixed');
     
     try {
       // First, try to find customers by user ID in metadata

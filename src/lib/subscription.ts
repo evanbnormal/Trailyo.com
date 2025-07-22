@@ -49,16 +49,16 @@ export class SubscriptionService {
     }
   }
 
-  static async confirmSubscription(customerId: string, email: string, setupIntentId: string): Promise<{ subscriptionId: string; status: string }> {
+  static async confirmSubscription(customerId: string, email: string, setupIntentId: string, userId: string): Promise<{ subscriptionId: string; status: string }> {
     try {
-      console.log('SubscriptionService.confirmSubscription called with:', { customerId, email, setupIntentId });
+      console.log('SubscriptionService.confirmSubscription called with:', { customerId, email, setupIntentId, userId });
       
       const response = await fetch('/api/subscriptions/confirm', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ customerId, email, setupIntentId }),
+        body: JSON.stringify({ customerId, email, setupIntentId, userId }),
       });
 
       console.log('Subscription confirm response status:', response.status);

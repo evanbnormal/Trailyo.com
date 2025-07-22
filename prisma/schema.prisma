@@ -24,6 +24,7 @@ model User {
   updatedAt   DateTime @updatedAt
   trails      Trail[]
   analytics   AnalyticsEvent[]
+  subscription Subscription?
 }
 
 model Trail {
@@ -63,4 +64,19 @@ model ResetToken {
   token     String   @unique
   expires   DateTime
   createdAt DateTime @default(now())
+}
+
+model Subscription {
+  id                String   @id @default(uuid())
+  userId            String   @unique
+  user              User     @relation(fields: [userId], references: [id])
+  stripeCustomerId  String
+  stripeSubscriptionId String
+  status            String   // active, trialing, canceled, past_due, etc.
+  planType          String   @default("creator") // creator, etc.
+  trialEnd          DateTime?
+  currentPeriodEnd  DateTime?
+  canceledAt        DateTime?
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
 }
