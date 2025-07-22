@@ -62,7 +62,7 @@ const PaymentForm: React.FC<{
         elements,
         clientSecret,
         confirmParams: {
-          return_url: `${window.location.origin}`,
+          return_url: window.location.href, // Return to current page
         },
       });
 
@@ -72,7 +72,10 @@ const PaymentForm: React.FC<{
         return;
       }
 
-      console.log('Payment setup successful, creating subscription...');
+      console.log('Payment setup successful, waiting for setup intent to be ready...');
+
+      // Wait a moment for the setup intent to be fully processed
+      await new Promise(resolve => setTimeout(resolve, 2000));
 
       // Get customer ID
       const customerResponse = await fetch('/api/stripe/create-customer', {
