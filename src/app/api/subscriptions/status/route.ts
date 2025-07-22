@@ -57,25 +57,9 @@ export async function GET(request: NextRequest) {
         console.log('Matching customer:', { id: c.id, email: c.email, metadata: c.metadata });
       });
 
-      // Check each matching customer for active subscriptions
+      // Check each matching customer for subscriptions
       for (const customer of matchingCustomers) {
         console.log('Checking subscriptions for customer:', customer.id);
-        
-        // First check for active subscriptions
-        const activeSubscriptions = await stripe.subscriptions.list({
-          customer: customer.id,
-          status: 'active',
-        });
-        
-        console.log('Active subscriptions found:', activeSubscriptions.data.length);
-        
-        // Also check for trialing subscriptions
-        const trialingSubscriptions = await stripe.subscriptions.list({
-          customer: customer.id,
-          status: 'trialing',
-        });
-        
-        console.log('Trialing subscriptions found:', trialingSubscriptions.data.length);
         
         // Check all subscriptions for this customer
         const allSubscriptions = await stripe.subscriptions.list({
@@ -91,7 +75,7 @@ export async function GET(request: NextRequest) {
           });
         });
 
-        // Return true if we have any subscriptions (active, trialing, past_due, etc.)
+        // Return true if we have any valid subscriptions
         if (allSubscriptions.data.length > 0) {
           const subscription = allSubscriptions.data[0];
           const isTrialing = subscription.status === 'trialing';
