@@ -25,7 +25,7 @@ export async function POST(request: NextRequest) {
 
   try {
     switch (event.type) {
-      case 'payment_intent.succeeded':
+      case 'payment_intent.succeeded': {
         const paymentIntent = event.data.object as Stripe.PaymentIntent;
         console.log('Payment succeeded:', paymentIntent.id);
         
@@ -38,11 +38,13 @@ export async function POST(request: NextRequest) {
           // Add any additional logic for skip payments
         }
         break;
+      }
 
-      case 'payment_intent.payment_failed':
+      case 'payment_intent.payment_failed': {
         const failedPayment = event.data.object as Stripe.PaymentIntent;
         console.log('Payment failed:', failedPayment.id);
         break;
+      }
 
       default:
         console.log(`Unhandled event type: ${event.type}`);

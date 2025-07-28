@@ -4,7 +4,7 @@ import { SubscriptionService, SubscriptionStatus } from '../lib/subscription';
 
 // Global state to prevent multiple intervals
 let globalInterval: NodeJS.Timeout | null = null;
-let globalSubscribers = new Set<(status: SubscriptionStatus) => void>();
+const globalSubscribers = new Set<(status: SubscriptionStatus) => void>();
 
 export const useSubscription = () => {
   const { user } = useAuth();
