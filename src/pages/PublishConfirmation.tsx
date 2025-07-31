@@ -33,15 +33,40 @@ const PublishConfirmation: React.FC = () => {
         return;
       }
 
-      // Get the most recently published trail from user's data
+      // First, try to get the trail from sessionStorage (passed from publish action)
+      const publishedTrailData = sessionStorage.getItem('publishedTrail');
+      if (publishedTrailData) {
+        try {
+          const trail = JSON.parse(publishedTrailData);
+          console.log('📄 Found published trail in sessionStorage:', trail.title);
+          console.log('🔗 Shareable link:', trail.shareableLink);
+          setPublishedTrail(trail);
+          // Clear the sessionStorage after use
+          sessionStorage.removeItem('publishedTrail');
+          
+          // Animate tick in after a short delay
+          const timer = setTimeout(() => {
+            setShowTick(true);
+          }, 300);
+          return () => clearTimeout(timer);
+        } catch (error) {
+          console.error('Error parsing published trail from sessionStorage:', error);
+        }
+      }
+
+      // Fallback: Get the most recently published trail from user's data
+      console.log('📄 No trail in sessionStorage, fetching from getUserTrails...');
       const userTrails = await getUserTrails();
       const { published } = userTrails;
       if (published.length > 0) {
         // Get the most recent one (last in array)
         const latestTrail = published[published.length - 1];
+        console.log('📄 Found latest trail from getUserTrails:', latestTrail.title);
+        console.log('🔗 Shareable link:', latestTrail.shareableLink);
         setPublishedTrail(latestTrail);
       } else {
         // If no published trail found, redirect to profile
+        console.log('📄 No published trails found, redirecting to profile');
         navigate('/profile');
       }
 
@@ -55,10 +80,31 @@ const PublishConfirmation: React.FC = () => {
     fetchPublishedTrail();
   }, [navigate, user, getUserTrails]);
 
-  const copyShareLink = () => {
+  const copyShareLink = async () => {
+    console.log('📋 Copy link clicked in PublishConfirmation');
+    console.log('📋 Published trail:', publishedTrail?.title);
+    console.log('📋 Shareable link:', publishedTrail?.shareableLink);
+    
     if (publishedTrail?.shareableLink) {
-      navigator.clipboard.writeText(publishedTrail.shareableLink);
-      toast.success('Link copied to clipboard!');
+      try {
+        await navigator.clipboard.writeText(publishedTrail.shareableLink);
+        toast.success('Link copied to clipboard!');
+        console.log('📋 Link copied successfully');
+      } catch (error) {
+        console.error('📋 Failed to copy to clipboard:', error);
+        // Fallback: create a temporary input and copy
+        const textArea = document.createElement('textarea');
+        textArea.value = publishedTrail.shareableLink;
+        document.body.appendChild(textArea);
+        textArea.select();
+        document.execCommand('copy');
+        document.body.removeChild(textArea);
+        toast.success('Link copied to clipboard!');
+        console.log('📋 Link copied using fallback method');
+      }
+    } else {
+      console.log('📋 No shareable link available');
+      toast.error('No shareable link available');
     }
   };
 

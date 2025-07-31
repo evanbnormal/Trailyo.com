@@ -1450,6 +1450,7 @@ const CreatorView: React.FC = () => {
 
     try {
       console.log('🚀 Publishing trail:', trailId);
+      console.log('🔗 Shareable link:', publishedTrail.shareableLink);
       
       // Save to user's account as published
       await saveUserTrail(publishedTrail, 'published');
@@ -1481,6 +1482,11 @@ const CreatorView: React.FC = () => {
         }));
       }
 
+      // Store the published trail temporarily for the confirmation page
+      if (typeof window !== 'undefined') {
+        sessionStorage.setItem('publishedTrail', JSON.stringify(publishedTrail));
+      }
+      
       // Always navigate to publish confirmation page, regardless of whether it's a draft or new trail
       toast.success('Trail published successfully!');
       navigate('/publish-confirmation');

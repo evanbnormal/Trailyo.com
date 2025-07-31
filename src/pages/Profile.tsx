@@ -292,10 +292,31 @@ const Profile: React.FC = () => {
     setShowSharingDialog(true);
   };
 
-  const copyShareLink = () => {
+  const copyShareLink = async () => {
+    console.log('📋 Copy link clicked');
+    console.log('📋 Current trail:', currentTrail?.title);
+    console.log('📋 Shareable link:', currentTrail?.shareableLink);
+    
     if (currentTrail?.shareableLink) {
-      navigator.clipboard.writeText(currentTrail.shareableLink);
-      toast.success('Link copied to clipboard!');
+      try {
+        await navigator.clipboard.writeText(currentTrail.shareableLink);
+        toast.success('Link copied to clipboard!');
+        console.log('📋 Link copied successfully');
+      } catch (error) {
+        console.error('📋 Failed to copy to clipboard:', error);
+        // Fallback: create a temporary input and copy
+        const textArea = document.createElement('textarea');
+        textArea.value = currentTrail.shareableLink;
+        document.body.appendChild(textArea);
+        textArea.select();
+        document.execCommand('copy');
+        document.body.removeChild(textArea);
+        toast.success('Link copied to clipboard!');
+        console.log('📋 Link copied using fallback method');
+      }
+    } else {
+      console.log('📋 No shareable link available');
+      toast.error('No shareable link available');
     }
   };
 
