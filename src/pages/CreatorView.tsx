@@ -35,7 +35,7 @@ interface TrailStep {
 }
 
 // Use process.env for Next.js public env variables
-const PROXY_BASE_URL = process.env.NEXT_PUBLIC_PROXY_BASE_URL || 'http://localhost:3002';
+const PROXY_BASE_URL = process.env.NEXT_PUBLIC_PROXY_BASE_URL || (typeof window !== 'undefined' ? window.location.origin : 'http://localhost:3000');
 
 const RewardGlow = () => {
   const isPresent = useIsPresent();
@@ -176,34 +176,46 @@ const ContentPreview = ({
             <img src="/Asset 10newest.png" alt="Default thumbnail" className="w-10 h-10 object-contain" />
           </div>
           <p className="text-sm text-gray-600 text-center font-medium">
-            {isValidUrl(debouncedUrl) ? 'Click the edit button to upload a custom thumbnail' : 'Enter a URL or upload a thumbnail'}
+            Enter a URL to automatically generate preview
           </p>
-          {isValidUrl(debouncedUrl) && (
-            <p className="text-xs text-gray-500 text-center mt-1">
-              Or we'll try to fetch a preview automatically
-            </p>
-          )}
+          <p className="text-xs text-gray-500 text-center mt-1">
+            We'll automatically detect videos or generate thumbnails
+          </p>
         </div>
       );
 
       if (isValidUrl(debouncedUrl) && !getYouTubeVideoId(debouncedUrl) && !thumbnailUrl) {
-        // Try to fetch thumbnail from the URL
+        // Try to fetch content from the URL (video or thumbnail)
         const fetchPromise = async () => {
-          console.log('Fetching thumbnail for:', debouncedUrl);
-          const response = await fetch(`${PROXY_BASE_URL}/proxy?url=${encodeURIComponent(debouncedUrl)}`);
-          console.log('Proxy response status:', response.status);
+          const response = await fetch(`${PROXY_BASE_URL}/api/proxy?url=${encodeURIComponent(debouncedUrl)}`);
           
           if (!response.ok) {
             const errorText = await response.text();
-            console.log('Proxy error:', errorText);
             throw new Error(`Failed to fetch preview: ${response.status} ${errorText}`);
           }
           
-          const blob = await response.blob();
-          console.log('Blob type:', blob.type, 'Size:', blob.size);
+          const contentType = response.headers.get('content-type');
+          
+          // Clone response first to avoid consuming the stream
+          const responseClone = response.clone();
+          
+          // Check if response is JSON (video metadata)
+          if (contentType?.includes('application/json')) {
+            try {
+              const data = await response.json();
+              if (data.type === 'video' && data.videoUrl) {
+                return { type: 'video', url: data.videoUrl, title: data.title };
+              }
+            } catch (jsonError) {
+              // Failed to parse JSON, treat as image
+            }
+          }
+          
+          // Otherwise it's an image - use the cloned response
+          const blob = await responseClone.blob();
           
           if (!blob.type.startsWith('image/')) {
-            throw new Error('Fetched content is not an image');
+            throw new Error(`Fetched content is not an image: ${blob.type}`);
           }
           
           const base64Url = await new Promise<string>((resolve, reject) => {
@@ -217,21 +229,34 @@ const ContentPreview = ({
             throw new Error("Component unmounted");
           }
           
-          console.log('Successfully converted to base64');
-          return base64Url;
+          return { type: 'image', url: base64Url };
         };
 
         try {
           const result = await fetchPromise();
           if (!isCancelled) {
-            onThumbnailUpdate(result);
-            setPreview(
-              <img 
-                src={result} 
-                alt="Website preview" 
-                className="w-full h-full object-cover rounded-md"
-              />
-            );
+            if (result.type === 'video') {
+              // Show video embed
+              setPreview(
+                <iframe
+                  className="w-full h-full aspect-video rounded-md"
+                  src={result.url}
+                  title={result.title || "Embedded video"}
+                  allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                  allowFullScreen
+                />
+              );
+            } else {
+              // Show image thumbnail
+              onThumbnailUpdate(result.url);
+              setPreview(
+                <img 
+                  src={result.url} 
+                  alt="Website preview" 
+                  className="w-full h-full object-cover rounded-md"
+                />
+              );
+            }
             setIsLoading(false);
           }
         } catch (error) {
@@ -254,7 +279,7 @@ const ContentPreview = ({
     return () => {
       isCancelled = true;
     };
-  }, [debouncedUrl, thumbnailUrl, onThumbnailUpdate]);
+  }, [debouncedUrl, thumbnailUrl]); // Removed onThumbnailUpdate to prevent infinite loop
 
   const handleEditClick = () => {
     fileInputRef.current?.click();
@@ -289,9 +314,19 @@ const ContentPreview = ({
     };
   };
 
+
+
   return (
     <div className={`relative aspect-video bg-gray-100 rounded-md overflow-hidden flex items-center justify-center min-h-[200px] ${className}`}>
-      {isLoading ? <p className="text-gray-500">Loading Preview...</p> : preview}
+      {isLoading ? (
+        <p className="text-gray-500">Loading Preview...</p>
+      ) : preview ? (
+        <div className="w-full h-full">
+          {preview}
+        </div>
+      ) : (
+        <p className="text-gray-500">No preview available</p>
+      )}
       <div className="absolute top-2 right-2 opacity-50 hover:opacity-100 transition-opacity">
         <Button size="icon" variant="secondary" onClick={handleEditClick} className="h-8 w-8">
           <Edit className="h-4 w-4" />
@@ -341,7 +376,9 @@ const EditView: React.FC<{
         />
       )}
       <div>
-          <label className="text-base sm:text-lg lg:text-xl font-semibold text-black">Content URL</label>
+          <label className="text-base sm:text-lg lg:text-xl font-semibold text-black">
+            {step.type === 'reward' ? 'Reward URL' : 'Content URL'}
+          </label>
           <Input
             value={step.source}
             onChange={(e) => {
@@ -352,7 +389,7 @@ const EditView: React.FC<{
                 thumbnailUrl: newUrl !== step.source ? '' : step.thumbnailUrl
               });
             }}
-            placeholder="Enter Content URL"
+            placeholder={step.type === 'reward' ? 'Enter Reward Link' : 'Enter Content URL'}
             className={cn(
               "mt-2 h-10 sm:h-12 lg:h-14 text-sm sm:text-lg lg:text-xl [&::placeholder]:text-gray-400 [&::placeholder]:text-sm sm:[&::placeholder]:text-lg lg:[&::placeholder]:text-xl [&::placeholder]:font-normal",
               step.type === 'reward' && "focus-visible:ring-yellow-500 text-yellow-600 placeholder:text-yellow-400/70"
@@ -411,7 +448,9 @@ const PreviewView: React.FC<{
 }> = React.memo(({ step, index, updateStep, removeStep, setEditingStepId, isOnlyStep }) => {
   const handleRedeem = () => {
     if (step.source && isValidUrl(step.source)) {
-      window.open(step.source, '_blank', 'noopener,noreferrer');
+              if (typeof window !== 'undefined') {
+          window.open(step.source, '_blank', 'noopener,noreferrer');
+        }
     } else {
       toast.error("Invalid or missing reward URL.");
     }
@@ -430,11 +469,11 @@ const PreviewView: React.FC<{
                   onThumbnailUpdate={(newUrl) => updateStep(index, { thumbnailUrl: newUrl })}
                 />
               )}
-              <p className="text-base sm:text-lg mb-8" style={{ color: '#D4AF37' }}>{step.content}</p>
+              <p className="text-base sm:text-lg mb-4" style={{ color: '#D4AF37' }}>{step.content}</p>
               <motion.div
                 whileHover={{ scale: 1.05 }}
                 whileTap={{ scale: 0.95 }}
-                className="inline-block mt-2"
+                className="inline-block mt-1"
               >
                 <Button onClick={handleRedeem} size="default" className="bg-gradient-to-r from-yellow-500 to-amber-600 text-white hover:from-yellow-600 hover:to-amber-700 shadow-lg h-12 px-8 text-lg">
                   <Gift className="h-5 w-5 mr-3" />
@@ -907,8 +946,9 @@ const CreatorView: React.FC = () => {
   const [showUnsavedStepsDialog, setShowUnsavedStepsDialog] = useState(false);
   const [showLoginModal, setShowLoginModal] = useState(false);
   const [showSubscriptionModal, setShowSubscriptionModal] = useState(false);
-  const { isAuthenticated, saveUserTrail, deleteUserTrail } = useAuth();
-  const { canCreateTrails, startSubscription, subscriptionStatus } = useSubscription();
+  const [isSaving, setIsSaving] = useState(false);
+  const { isAuthenticated, saveUserTrail, deleteUserTrail, user } = useAuth();
+  const { canCreateTrails, startSubscription, subscriptionStatus, isLoading: subscriptionLoading } = useSubscription();
 
   // Currency options
   const currencies = [
@@ -926,6 +966,9 @@ const CreatorView: React.FC = () => {
     return currencies.find(c => c.code === code)?.symbol || '$';
   };
 
+  // Track if this is the initial load to prevent modal from auto-closing when user clicks Edit Details
+  const [hasInitialized, setHasInitialized] = useState(false);
+
   useEffect(() => {
     // Check if we're editing an existing trail
     const editingTrailData = localStorage.getItem('editingTrail');
@@ -940,11 +983,15 @@ const CreatorView: React.FC = () => {
         setSteps(trail.steps || []);
         setEditingTrailId(trail.id);
         
-        // Clear the editing data from localStorage
-        localStorage.removeItem('editingTrail');
+        // Keep the editing data in localStorage for persistence across page refreshes
+        // Only remove it when explicitly leaving the editor or publishing
+        // localStorage.removeItem('editingTrail'); // ❌ Don't remove immediately!
         
-        // Don't show modal when editing existing trail
-        setShowModal(false);
+        // Don't show modal when editing existing trail - but only on initial load
+        if (!hasInitialized) {
+          setShowModal(false);
+          setHasInitialized(true);
+        }
         
         // If there are steps, set the first one as current
         if (trail.steps && trail.steps.length > 0) {
@@ -964,15 +1011,20 @@ const CreatorView: React.FC = () => {
         ]);
         setEditingStepId(initialStepId);
       }
+      if (!hasInitialized) {
+        setHasInitialized(true);
+      }
     }
-  }, [steps.length, showModal]);
+  }, [steps.length, hasInitialized]);
 
   // Scroll to top when switching to overview mode
   useEffect(() => {
     if (isOverviewMode) {
       // Small delay to ensure the mode switch animation starts first
       const timer = setTimeout(() => {
+        if (typeof window !== 'undefined') {
         window.scrollTo({ top: 0, behavior: 'smooth' });
+      }
       }, 100);
       return () => clearTimeout(timer);
     }
@@ -1010,7 +1062,9 @@ const CreatorView: React.FC = () => {
     
     // Scroll to top when switching to overview mode for smooth experience
     if (newMode) {
-      window.scrollTo({ top: 0, behavior: 'smooth' });
+      if (typeof window !== 'undefined') {
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+      }
     }
   }
 
@@ -1129,14 +1183,16 @@ const CreatorView: React.FC = () => {
                 <div key={q.id} className="flex items-center">
                   <div
                     className={cn(
-                      "w-6 h-6 rounded-full flex items-center justify-center transition-all duration-300",
+                      "w-8 h-8 rounded-full flex items-center justify-center transition-all duration-300 text-sm font-bold",
                       actualIndex === currentQuestion 
                         ? "bg-black text-white scale-125" 
                         : actualIndex < currentQuestion 
                           ? "bg-gray-400 text-white" 
-                          : "bg-gray-200 text-gray-500"
+                          : "bg-gray-600 text-white"
                     )}
-                  />
+                  >
+                    {actualIndex + 1}
+                  </div>
                   {index < visibleSteps.length - 1 && (
                     <div className={cn(
                       "w-12 h-0.5 mx-3 transition-all duration-300",
@@ -1175,7 +1231,7 @@ const CreatorView: React.FC = () => {
               <span className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-500 [&]:text-[1.125rem] [&]:md:text-[1.125rem] min-w-[1.5rem] text-right">{getCurrencySymbol(trailCurrency)}</span>
               <Input
                 type="number"
-                value={suggestedInvestment === 0 ? '' : suggestedInvestment}
+                value={suggestedInvestment}
                 onChange={(e) => setSuggestedInvestment(Number(e.target.value) || 0)}
                 placeholder={question.placeholder}
                 className="pl-12 text-left [&]:text-[1.125rem] [&]:md:text-[1.125rem]"
@@ -1202,7 +1258,7 @@ const CreatorView: React.FC = () => {
                 <span className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-500 [&]:text-[1.125rem] [&]:md:text-[1.125rem] min-w-[1.5rem] text-right">{getCurrencySymbol(trailCurrency)}</span>
                 <Input
                   type="number"
-                  value={trailValue === 0 ? '' : trailValue}
+                  value={trailValue}
                   onChange={(e) => setTrailValue(Number(e.target.value) || 0)}
                   placeholder={question.placeholder}
                   className="pl-12 text-left [&]:text-[1.125rem] [&]:md:text-[1.125rem]"
@@ -1249,41 +1305,66 @@ const CreatorView: React.FC = () => {
       return;
     }
 
-    // Create trail object for draft
-    const draftTrail = {
-      id: editingTrailId || `trail-${Date.now()}`,
-      title: trailTitle,
-      description: trailDescription,
-      status: 'draft' as const,
-      createdAt: editingTrailId ? new Date().toISOString() : new Date().toISOString(),
-      views: 0,
-      earnings: 0,
-      steps: steps,
-      thumbnailUrl: steps.find(step => step.type === 'reward')?.thumbnailUrl || undefined,
-      suggestedInvestment,
-      trailValue,
-      trailCurrency,
-      creator_id: '',
-      created_at: new Date().toISOString(),
-      updated_at: new Date().toISOString(),
-      is_published: false
-    };
+    if (isSaving) {
+      console.log('🚫 Save already in progress, preventing duplicate');
+      return; // Prevent multiple saves
+    }
+
+    console.log('💾 Starting save process...');
+    setIsSaving(true);
 
     try {
-    // Save to user's account
-      await saveUserTrail(draftTrail, 'draft');
+      // Create a consistent trail ID
+      const trailId = editingTrailId || `trail-${Date.now()}`;
+      console.log('🆔 Trail ID:', trailId, 'Editing existing:', !!editingTrailId);
+      
+      // Create trail object for draft
+      const draftTrail = {
+        id: trailId,
+        title: trailTitle,
+        description: trailDescription,
+        status: 'draft' as const,
+        createdAt: editingTrailId ? new Date().toISOString() : new Date().toISOString(),
+        views: 0,
+        earnings: 0,
+        steps: steps,
+        thumbnailUrl: (() => {
+          const rewardStep = steps.find(step => step.type === 'reward');
+          const thumbnailUrl = rewardStep?.thumbnailUrl;
+          console.log('🖼️ Reward step found:', !!rewardStep, 'Thumbnail URL:', thumbnailUrl);
+          return thumbnailUrl || undefined;
+        })(),
+        suggestedInvestment,
+        trailValue,
+        trailCurrency,
+        creator_id: '',
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+        is_published: false
+      };
 
-    // Always stay in creator view and save in background
-    if (editingTrailId) {
-      toast.success('Changes saved!');
-    } else {
-      toast.success('Trail saved as draft!');
+      // Save to user's account
+      await saveUserTrail(draftTrail, 'draft');
+      
+      // Remove from saved trails since user is now the creator
+      if (typeof window !== 'undefined' && user) {
+        const savedTrails = JSON.parse(localStorage.getItem(`user_${user.id}_saved`) || '[]');
+        const filteredSaved = savedTrails.filter((t: any) => t.id !== trailId);
+        localStorage.setItem(`user_${user.id}_saved`, JSON.stringify(filteredSaved));
+        if (savedTrails.length !== filteredSaved.length) {
+          console.log('🗑️ Removed trail from saved section (became creator via draft save)');
+        }
+      }
+
       // Set the editingTrailId so future saves update the same draft
-      setEditingTrailId(draftTrail.id);
+      if (!editingTrailId) {
+        setEditingTrailId(trailId);
       }
     } catch (error) {
       console.error('Error saving draft:', error);
       toast.error('Failed to save draft. Please try again.');
+    } finally {
+      setIsSaving(false);
     }
   };
 
@@ -1357,7 +1438,7 @@ const CreatorView: React.FC = () => {
       earnings: 0,
       steps: steps,
       thumbnailUrl: steps.find(step => step.type === 'reward')?.thumbnailUrl || undefined,
-      shareableLink: `${window.location.origin}/trail/${trailId}`,
+              shareableLink: `${typeof window !== 'undefined' ? window.location.origin : 'http://localhost:3000'}/trail/${trailId}`,
       suggestedInvestment,
       trailValue,
       trailCurrency,
@@ -1368,15 +1449,41 @@ const CreatorView: React.FC = () => {
     };
 
     try {
+      console.log('🚀 Publishing trail:', trailId);
+      
       // Save to user's account as published
       await saveUserTrail(publishedTrail, 'published');
+      console.log('✅ Trail saved as published');
+      
+      // Remove from saved trails since user is now the creator
+      if (typeof window !== 'undefined' && user) {
+        const savedTrails = JSON.parse(localStorage.getItem(`user_${user.id}_saved`) || '[]');
+        const filteredSaved = savedTrails.filter((t: any) => t.id !== trailId);
+        localStorage.setItem(`user_${user.id}_saved`, JSON.stringify(filteredSaved));
+        if (savedTrails.length !== filteredSaved.length) {
+          console.log('🗑️ Removed trail from saved section (became creator via publish)');
+        }
+      }
       
       // Remove from drafts if it exists there (this handles both editing existing drafts and new trails)
-      deleteUserTrail(trailId, 'draft');
+      await deleteUserTrail(trailId, 'draft');
+      console.log('✅ Trail removed from drafts');
 
-    // Always navigate to publish confirmation page, regardless of whether it's a draft or new trail
-    toast.success('Trail published successfully!');
-    navigate('/publish-confirmation');
+      // Clear the editing data from localStorage since we're done editing
+      localStorage.removeItem('editingTrail');
+      console.log('✅ Cleared editing data from localStorage');
+
+      // Force a storage event to update other components
+      if (typeof window !== 'undefined') {
+        window.dispatchEvent(new StorageEvent('storage', {
+          key: `user_${user?.id}_drafts`,
+          newValue: localStorage.getItem(`user_${user?.id}_drafts`)
+        }));
+      }
+
+      // Always navigate to publish confirmation page, regardless of whether it's a draft or new trail
+      toast.success('Trail published successfully!');
+      navigate('/publish-confirmation');
     } catch (error) {
       console.error('Error publishing trail:', error);
       toast.error('Failed to publish trail. Please try again.');
@@ -1409,16 +1516,37 @@ const CreatorView: React.FC = () => {
   };
 
   const checkSubscriptionBeforeAction = (action: () => void) => {
+    console.log('🔒 Checking subscription before action...', {
+      isAuthenticated,
+      subscriptionLoading,
+      subscriptionStatus,
+      canCreate: canCreateTrails()
+    });
+    
     if (!isAuthenticated) {
+      console.log('❌ Not authenticated, showing login modal');
       setShowLoginModal(true);
       return;
     }
 
+    // If subscription is still loading, wait a moment and try again
+    if (subscriptionLoading) {
+      console.log('⏳ Subscription still loading, waiting...');
+      setTimeout(() => checkSubscriptionBeforeAction(action), 1000);
+      return;
+    }
+
     if (!canCreateTrails()) {
+      console.log('❌ Cannot create trails, showing subscription modal', {
+        isSubscribed: subscriptionStatus?.isSubscribed,
+        isTrialing: subscriptionStatus?.isTrialing,
+        status: subscriptionStatus?.status
+      });
       setShowSubscriptionModal(true);
       return;
     }
 
+    console.log('✅ Subscription check passed, executing action');
     action();
   };
 
@@ -1501,8 +1629,9 @@ const CreatorView: React.FC = () => {
                 variant="outline" 
                 className="bg-gray-100"
                 onClick={() => checkSubscriptionBeforeAction(handleSaveAsDraft)}
+                disabled={isSaving || subscriptionLoading}
               >
-                {editingTrailId ? 'Save Changes' : 'Save as Draft'}
+                {isSaving ? 'Saving...' : subscriptionLoading ? 'Loading...' : (editingTrailId ? 'Save Changes' : 'Save as Draft')}
               </Button>
               <Button 
                 className={cn(

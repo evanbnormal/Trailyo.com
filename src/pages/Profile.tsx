@@ -67,14 +67,10 @@ const Profile: React.FC = () => {
   const [selectedTrail, setSelectedTrail] = useState<Trail | null>(null);
   const navigate = useNavigate();
   const { user, getUserTrails, saveUserTrail, deleteUserTrail } = useAuth();
-  const { subscriptionStatus, canCreateTrails, loadSubscriptionStatus } = useSubscription();
+  const { subscriptionStatus, canCreateTrails, isLoading: subscriptionLoading } = useSubscription();
 
-  // Force refresh subscription status when profile loads
-  useEffect(() => {
-    if (user?.id) {
-      loadSubscriptionStatus();
-    }
-  }, [user?.id, loadSubscriptionStatus]);
+  // Subscription status loads automatically via useSubscription hook
+  // Smart caching ensures fresh data while avoiding spam requests
 
   // Load trails from user's account on component mount
   useEffect(() => {
@@ -88,7 +84,7 @@ const Profile: React.FC = () => {
       
       // Combine and sort all trails by creation date
       const allTrails = [...drafts, ...published].sort((a, b) => 
-        new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+        new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
       );
       
       setTrails(allTrails);
@@ -108,17 +104,63 @@ const Profile: React.FC = () => {
       }
     };
 
-    window.addEventListener('focus', handleFocus);
-    window.addEventListener('storage', handleStorageChange);
+    if (typeof window !== 'undefined') {
+      window.addEventListener('focus', handleFocus);
+      window.addEventListener('storage', handleStorageChange);
+    }
     
     return () => {
-      window.removeEventListener('focus', handleFocus);
-      window.removeEventListener('storage', handleStorageChange);
+      if (typeof window !== 'undefined') {
+        window.removeEventListener('focus', handleFocus);
+        window.removeEventListener('storage', handleStorageChange);
+      }
     };
   }, [user, getUserTrails]);
 
-  const publishedTrails = trails.filter(trail => (trail as any).status === 'published' || (trail as any).is_published);
-  const draftTrails = trails.filter(trail => (trail as any).status === 'draft' || !(trail as any).is_published);
+  // Fix: Use mutually exclusive logic - prioritize 'status' field, fallback to 'is_published'
+  const publishedTrails = trails.filter(trail => {
+    const status = (trail as any).status;
+    const isPublished = (trail as any).is_published;
+    
+    // If status field exists, use it (modern format)
+    if (status) {
+      return status === 'published';
+    }
+    // Otherwise use legacy is_published field
+    return isPublished === true;
+  });
+  
+  const draftTrails = trails.filter(trail => {
+    const status = (trail as any).status;
+    const isPublished = (trail as any).is_published;
+    
+    // If status field exists, use it (modern format) 
+    if (status) {
+      return status === 'draft';
+    }
+    // Otherwise use legacy is_published field
+    return isPublished !== true; // draft if not explicitly published
+  });
+
+  // Debug trail categorization
+  console.log('🔍 Profile.tsx trail categorization:', {
+    totalTrails: trails.length,
+    publishedCount: publishedTrails.length,
+    draftCount: draftTrails.length,
+    trails: trails.map(t => ({ 
+      id: t.id, 
+      title: t.title, 
+      status: (t as any).status,
+      is_published: (t as any).is_published,
+      creatorId: (t as any).creatorId,
+      categorized_as: {
+        published: publishedTrails.some(pt => pt.id === t.id),
+        draft: draftTrails.some(dt => dt.id === t.id)
+      }
+    }))
+  });
+
+
 
   const formatDate = (dateString: string) => {
     return new Date(dateString).toLocaleDateString('en-US', {
@@ -151,7 +193,7 @@ const Profile: React.FC = () => {
         // Force reload trails by triggering the useEffect
         const { drafts, published } = await getUserTrails();
         const allTrails = [...drafts, ...published].sort((a, b) => 
-          new Date((b as any).createdAt || (b as any).created_at).getTime() - new Date((a as any).createdAt || (a as any).created_at).getTime()
+          new Date((b as any).createdAt).getTime() - new Date((a as any).createdAt).getTime()
         );
         setTrails(allTrails as any);
 
@@ -411,12 +453,33 @@ const Profile: React.FC = () => {
       try {
         // Load saved trails from localStorage
         const savedTrailsData = localStorage.getItem(`user_${user.id}_saved`);
+        console.log('🔍 Saved trails debug:', {
+          userId: user.id,
+          savedKey: `user_${user.id}_saved`,
+          rawData: savedTrailsData,
+          exists: !!savedTrailsData
+        });
+        
         if (savedTrailsData) {
           const parsedTrails = JSON.parse(savedTrailsData);
+          console.log('🔍 Parsed saved trails:', {
+            total: parsedTrails.length,
+            trails: parsedTrails.map((t: any) => ({ 
+              id: t.id, 
+              title: t.title, 
+              active: t.active 
+            }))
+          });
+          
           // Filter for trails with active: true (trails user is actively learning)
           const activeTrails = parsedTrails.filter((trail: any) => trail.active === true);
+          console.log('🔍 Active saved trails:', {
+            count: activeTrails.length,
+            trails: activeTrails.map((t: any) => ({ id: t.id, title: t.title }))
+          });
           setSavedTrails(activeTrails);
         } else {
+          console.log('🔍 No saved trails data found');
           setSavedTrails([]);
         }
       } catch (error) {
@@ -434,9 +497,17 @@ const Profile: React.FC = () => {
       }
     };
 
-    window.addEventListener('storage', handleStorageChange);
-    return () => window.removeEventListener('storage', handleStorageChange);
+    if (typeof window !== 'undefined') {
+      window.addEventListener('storage', handleStorageChange);
+    }
+    return () => {
+      if (typeof window !== 'undefined') {
+        window.removeEventListener('storage', handleStorageChange);
+      }
+    };
   }, [user]);
+
+
 
   return (
     <div className="min-h-screen bg-gray-50 py-8">
@@ -474,13 +545,151 @@ const Profile: React.FC = () => {
             </p>
           )}
           
+          
           {/* Create New Trail Button */}
-          <Link to="/creator">
-            <Button className="bg-black text-white hover:bg-black/90">
-              <Plus className="h-4 w-4 mr-2" />
-              Create New Trail
-            </Button>
-          </Link>
+          <div className="flex gap-2 items-center">
+            <Link to="/creator">
+              <Button className="bg-black text-white hover:bg-black/90">
+                <Plus className="h-4 w-4 mr-2" />
+                Create New Trail
+              </Button>
+            </Link>
+            {/* Recovery function - run in console */}
+                        <button 
+              onClick={() => {
+                const userId = user?.id;
+                if (!userId) return;
+                
+                // Clean up trails that should not be in saved section
+                const draftsKey = `user_${userId}_drafts`;
+                const publishedKey = `user_${userId}_published`;
+                const savedKey = `user_${userId}_saved`;
+                
+                const drafts = JSON.parse(localStorage.getItem(draftsKey) || '[]');
+                const published = JSON.parse(localStorage.getItem(publishedKey) || '[]');
+                const saved = JSON.parse(localStorage.getItem(savedKey) || '[]');
+                
+                // Get all trail IDs that the user created (should not be in saved)
+                const createdTrailIds = new Set([
+                  ...drafts.map((t: any) => t.id),
+                  ...published.map((t: any) => t.id)
+                ]);
+                
+                // Remove creator's own trails from saved section
+                const cleanedSaved = saved.filter((trail: any) => {
+                  const isCreatorTrail = createdTrailIds.has(trail.id) || 
+                    trail.creatorId === userId || 
+                    trail.creator_id === userId;
+                  return !isCreatorTrail;
+                });
+                
+                // Remove duplicate drafts (same title as published)
+                const cleanedDrafts = drafts.filter((draft: any) => {
+                  const hasPublishedVersion = published.some((pub: any) => 
+                    pub.title === draft.title && pub.id !== draft.id
+                  );
+                  return !hasPublishedVersion;
+                });
+                
+                // Save cleaned data
+                localStorage.setItem(savedKey, JSON.stringify(cleanedSaved));
+                localStorage.setItem(draftsKey, JSON.stringify(cleanedDrafts));
+                
+                console.log('🧹 Cleanup results:', {
+                  originalSaved: saved.length,
+                  cleanedSaved: cleanedSaved.length,
+                  originalDrafts: drafts.length,
+                  cleanedDrafts: cleanedDrafts.length,
+                  removedFromSaved: saved.length - cleanedSaved.length
+                });
+                
+                alert(`Cleanup complete! Removed ${saved.length - cleanedSaved.length} creator trails from saved section. Refreshing...`);
+                window.location.reload();
+              }}
+              style={{
+                padding: '8px 16px',
+                backgroundColor: '#dcfce7',
+                border: '1px solid #86efac',
+                borderRadius: '6px',
+                fontSize: '12px',
+                cursor: 'pointer'
+              }}
+            >
+              🧹 Clean Creator/Learner Separation
+            </button>
+            
+            <button 
+              onClick={() => {
+                // Run this in console for manual recovery
+                const recoveryCode = `
+async function manualRecovery() {
+  const userId = "${user?.id}";
+  const savedKey = \`user_\${userId}_saved\`;
+  const saved = JSON.parse(localStorage.getItem(savedKey) || '[]');
+
+  console.log('🔍 Manual Recovery Debug:', {
+    userId,
+    savedTotal: saved.length,
+    savedTrails: saved
+  });
+
+  if (saved.length === 0) {
+    console.log('❌ No saved trails found');
+    return;
+  }
+
+  for (const trail of saved) {
+    console.log(\`🔄 Recovering: \${trail.title}\`);
+
+    const trailData = {
+      ...trail,
+      creatorId: userId,
+      creator_id: userId,
+      status: 'published',
+      updatedAt: new Date().toISOString()
+    };
+
+    try {
+      const response = await fetch('/api/trails', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ trail: trailData, type: 'published' })
+      });
+
+      if (response.ok) {
+        console.log(\`✅ Successfully recovered: \${trail.title}\`);
+      } else {
+        console.log(\`❌ Failed to recover: \${trail.title}\`, await response.text());
+      }
+    } catch (error) {
+      console.log(\`❌ Error recovering \${trail.title}:\`, error);
+    }
+  }
+
+  console.log('🔄 Recovery complete. Refreshing page...');
+  window.location.reload();
+}
+
+manualRecovery();
+                                `;
+
+                console.log('🆘 MANUAL RECOVERY CODE:');
+                console.log('Copy and paste this into the console:');
+                console.log(recoveryCode);
+                alert('Recovery code logged to console! Copy and paste it to recover your trails.');
+              }}
+              style={{
+                padding: '8px 16px',
+                backgroundColor: '#fef2f2',
+                border: '1px solid #fecaca',
+                borderRadius: '6px',
+                fontSize: '12px',
+                cursor: 'pointer'
+              }}
+            >
+              🆘 Manual Recovery
+            </button>
+          </div>
         </div>
 
         {/* Trails Tabs */}
@@ -499,7 +708,19 @@ const Profile: React.FC = () => {
               ) : (
                 <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-2 gap-6">
                   {savedTrails.map((trail: Trail) => (
-                    <SavedTrailCard key={trail.id} trail={trail} onClick={() => window.open(trail.shareableLink || `/learner/${trail.id}`, '_self')} />
+                    <SavedTrailCard key={trail.id} trail={trail} onClick={() => {
+                console.log('🔍 Clicking saved trail:', {
+                  id: trail.id,
+                  title: trail.title,
+                  shareableLink: (trail as any).shareableLink,
+                  fallbackLink: `/learner/${trail.id}`
+                });
+                if (typeof window !== 'undefined') {
+                  const targetUrl = (trail as any).shareableLink || `/learner/${trail.id}`;
+                  console.log('🔍 Opening URL:', targetUrl);
+                  window.location.href = targetUrl;
+                }
+              }} />
                   ))}
                 </div>
               )}
@@ -646,6 +867,8 @@ const Profile: React.FC = () => {
           </div>
         </DialogContent>
       </Dialog>
+      
+      {/* Debug components removed - subscription status now working */}
     </div>
   );
 };

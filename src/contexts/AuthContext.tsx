@@ -21,6 +21,7 @@ interface AuthContextType {
   getUserTrails: () => Promise<{ drafts: Trail[]; published: Trail[] }>;
   saveUserTrail: (trail: Trail, type: 'draft' | 'published') => Promise<void>;
   deleteUserTrail: (trailId: string, type: 'draft' | 'published') => Promise<void>;
+  permanentlyDeleteTrail: (trailId: string) => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -276,41 +277,129 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     if (!user) return { drafts: [], published: [] };
 
     try {
-      // For now, we'll use localStorage as fallback
-      // In a real app, you'd fetch from the API with user ID
+      // First try to fetch from database
+      console.log('🔍 Fetching trails from database...');
+      const response = await fetch('/api/trails');
+      if (response.ok) {
+        const allTrails = await response.json();
+        console.log('📊 Database fetch result:', {
+          totalTrails: allTrails.length,
+          userId: user.id,
+          allTrailsPreview: allTrails.map((t: any) => ({ 
+            id: t.id, 
+            title: t.title, 
+            creatorId: t.creatorId,
+            status: t.status 
+          }))
+        });
+        
+        // Filter trails by user
+        const userTrails = allTrails.filter((trail: any) => 
+          trail.creatorId === user.id || trail.creator_id === user.id
+        );
+        
+        console.log('👤 Filtered user trails:', {
+          userTrailsCount: userTrails.length,
+          userTrails: userTrails.map((t: any) => ({ 
+            id: t.id, 
+            title: t.title, 
+            status: t.status 
+          }))
+        });
+        
+        // Separate drafts and published by status field
+        const drafts = userTrails.filter((trail: any) => 
+          trail.status === 'draft' || !trail.status
+        );
+        const published = userTrails.filter((trail: any) => 
+          trail.status === 'published'
+        );
+        
+        console.log('📂 Trail categorization:', {
+          drafts: drafts.length,
+          published: published.length
+        });
+        
+        // If database has trails for this user, return them
+        if (userTrails.length > 0) {
+          return { drafts, published };
+        }
+        
+        console.log('📱 Database empty for user, falling back to localStorage...');
+      } else {
+        console.log('❌ Database fetch failed:', response.status);
+      }
+      
+      // Fallback to localStorage if API fails or database is empty
       const draftKey = `user_${user.id}_drafts`;
       const publishedKey = `user_${user.id}_published`;
       
       const drafts = JSON.parse(localStorage.getItem(draftKey) || '[]');
       const published = JSON.parse(localStorage.getItem(publishedKey) || '[]');
       
+      console.log('📱 localStorage fallback result:', {
+        draftsCount: drafts.length,
+        publishedCount: published.length,
+        draftTitles: drafts.map((t: any) => t.title),
+        publishedTitles: published.map((t: any) => t.title)
+      });
+      
       return { drafts, published };
     } catch (error) {
       console.error('Error getting user trails:', error);
-      return { drafts: [], published: [] };
+      
+      // Final fallback to localStorage
+      try {
+        const draftKey = `user_${user.id}_drafts`;
+        const publishedKey = `user_${user.id}_published`;
+        
+        const drafts = JSON.parse(localStorage.getItem(draftKey) || '[]');
+        const published = JSON.parse(localStorage.getItem(publishedKey) || '[]');
+        
+        return { drafts, published };
+      } catch {
+        return { drafts: [], published: [] };
+      }
     }
   };
 
   const saveUserTrail = async (trail: Trail, type: 'draft' | 'published'): Promise<void> => {
     if (!user) return;
+    
+    console.log('🔄 AuthContext.saveUserTrail called with:', trail.id, 'type:', type);
 
     try {
       // Convert blob URLs before saving
       const convertedTrail = await convertBlobUrlsInTrail(trail);
       
-      // Save to API
-      await fetch('/api/trails', {
+      // Save to API with proper user ID
+      const trailWithUserId = {
+        ...convertedTrail,
+        creator_id: user.id,
+        creatorId: user.id
+      };
+      
+      const response = await fetch('/api/trails', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          trail: convertedTrail,
+          trail: trailWithUserId,
           type,
         }),
       });
 
-      // Also save to localStorage as backup
+      if (!response.ok) {
+        const errorData = await response.json();
+        console.error('❌ API trail save failed:', response.status, errorData);
+        throw new Error(`Trail save failed: ${response.status} - ${errorData.error || 'Unknown error'}`);
+      }
+
+      const result = await response.json();
+      console.log('✅ Trail saved to database successfully:', result);
+
+      // Also save to localStorage as backup after successful database save
       const draftKey = `user_${user.id}_drafts`;
       const publishedKey = `user_${user.id}_published`;
       
@@ -334,39 +423,105 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
         localStorage.setItem(publishedKey, JSON.stringify(published));
       }
 
-      toast.success(`Trail ${type === 'draft' ? 'saved' : 'published'} successfully!`);
+              toast.success(`Trail ${type === 'draft' ? 'saved' : 'published'} to database successfully!`);
     } catch (error) {
-      console.error('Error saving trail:', error);
-      toast.error('Failed to save trail. Please try again.');
+      console.error('❌ Database save failed, falling back to localStorage:', error);
+      
+      // Fallback: Save to localStorage only when database fails
+      const draftKey = `user_${user.id}_drafts`;
+      const publishedKey = `user_${user.id}_published`;
+      
+      try {
+        if (type === 'draft') {
+          const drafts = JSON.parse(localStorage.getItem(draftKey) || '[]');
+          const existingIndex = drafts.findIndex((t: any) => t.id === trail.id);
+          if (existingIndex >= 0) {
+            drafts[existingIndex] = convertedTrail;
+          } else {
+            drafts.push(convertedTrail);
+          }
+          localStorage.setItem(draftKey, JSON.stringify(drafts));
+        } else {
+          const published = JSON.parse(localStorage.getItem(publishedKey) || '[]');
+          const existingIndex = published.findIndex((t: any) => t.id === trail.id);
+          if (existingIndex >= 0) {
+            published[existingIndex] = convertedTrail;
+          } else {
+            published.push(convertedTrail);
+          }
+          localStorage.setItem(publishedKey, JSON.stringify(published));
+        }
+        
+        toast.warning(`Trail saved locally only (database connection failed). Data may be lost on server restart.`);
+      } catch (localError) {
+        console.error('❌ Even localStorage save failed:', localError);
+        toast.error('Failed to save trail anywhere. Please try again.');
+      }
     }
   };
 
   const deleteUserTrail = async (trailId: string, type: 'draft' | 'published'): Promise<void> => {
     if (!user) return;
 
-    try {
-      // Delete from API
-      await fetch(`/api/trails?trailId=${trailId}`, {
-        method: 'DELETE',
-      });
+    console.log(`🗑️ Starting deletion of trail ${trailId} from ${type} collection`);
 
-      // Also delete from localStorage
+    try {
+      // Only delete from localStorage, not from database
+      // This allows us to remove drafts without deleting published trails
       const draftKey = `user_${user.id}_drafts`;
       const publishedKey = `user_${user.id}_published`;
       
       if (type === 'draft') {
         const drafts = JSON.parse(localStorage.getItem(draftKey) || '[]');
+        console.log(`📋 Found ${drafts.length} drafts before deletion`);
         const filteredDrafts = drafts.filter((t: any) => t.id !== trailId);
+        console.log(`📋 Found ${filteredDrafts.length} drafts after filtering out ${trailId}`);
         localStorage.setItem(draftKey, JSON.stringify(filteredDrafts));
+        console.log(`✅ Updated localStorage with filtered drafts`);
       } else {
         const published = JSON.parse(localStorage.getItem(publishedKey) || '[]');
         const filteredPublished = published.filter((t: any) => t.id !== trailId);
         localStorage.setItem(publishedKey, JSON.stringify(filteredPublished));
+        
+        // Only delete from database if it's a published trail being permanently deleted
+        await fetch(`/api/trails?trailId=${trailId}`, {
+          method: 'DELETE',
+        });
       }
 
-      toast.success('Trail deleted successfully!');
+      console.log(`🗑️ Trail ${trailId} successfully removed from ${type} collection`);
     } catch (error) {
       console.error('Error deleting trail:', error);
+      toast.error('Failed to delete trail. Please try again.');
+    }
+  };
+
+  const permanentlyDeleteTrail = async (trailId: string): Promise<void> => {
+    if (!user) return;
+
+    try {
+      // Delete from database
+      await fetch(`/api/trails?trailId=${trailId}`, {
+        method: 'DELETE',
+      });
+
+      // Remove from both localStorage collections
+      const draftKey = `user_${user.id}_drafts`;
+      const publishedKey = `user_${user.id}_published`;
+      
+      const drafts = JSON.parse(localStorage.getItem(draftKey) || '[]');
+      const published = JSON.parse(localStorage.getItem(publishedKey) || '[]');
+      
+      const filteredDrafts = drafts.filter((t: any) => t.id !== trailId);
+      const filteredPublished = published.filter((t: any) => t.id !== trailId);
+      
+      localStorage.setItem(draftKey, JSON.stringify(filteredDrafts));
+      localStorage.setItem(publishedKey, JSON.stringify(filteredPublished));
+
+      console.log(`🗑️ Trail ${trailId} permanently deleted from database and localStorage`);
+      toast.success('Trail permanently deleted!');
+    } catch (error) {
+      console.error('Error permanently deleting trail:', error);
       toast.error('Failed to delete trail. Please try again.');
     }
   };
@@ -381,6 +536,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     getUserTrails,
     saveUserTrail,
     deleteUserTrail,
+    permanentlyDeleteTrail,
   };
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
