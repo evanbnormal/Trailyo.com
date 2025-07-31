@@ -14,12 +14,18 @@ export interface Trail {
   id: string;
   title: string;
   description: string;
-  creator_id: string;
-  is_published: boolean;
-  price?: number;
-  created_at: string;
-  updated_at: string;
+  creatorId: string;
+  status: 'published' | 'draft';
+  thumbnailUrl?: string;
+  createdAt: string;
+  updatedAt: string;
+  views: number;
+  earnings: number;
   steps: TrailStep[];
+  suggestedInvestment?: number;
+  trailValue?: number;
+  trailCurrency?: string;
+  shareableLink?: string;
 }
 
 export interface TrailStep {
@@ -31,6 +37,10 @@ export interface TrailStep {
   video_url?: string;
   skip_cost?: number;
   created_at: string;
+  type?: string;
+  source?: string;
+  thumbnailUrl?: string;
+  isSaved?: boolean;
 }
 
 export interface AnalyticsEvent {

@@ -82,12 +82,13 @@ export async function POST(request: NextRequest) {
         subject: 'Reset your password',
         text: `Click this link to reset your password: ${resetUrl}`,
         html: `
-          <div style="background:#fff;padding:32px 0;text-align:center;font-family:sans-serif;">
-            <h2 style="color:#111;margin-bottom:16px;">Reset your password</h2>
-            <p style="color:#444;margin-bottom:32px;">
+          <div style="background:#111;padding:32px 0;text-align:center;font-family:sans-serif;">
+            <img src="${baseUrl}/Asset%2010newest.png" alt="Trailyo" style="height:48px;margin-bottom:24px;" />
+            <h2 style="color:#fff;margin-bottom:16px;font-size:24px;">Reset your password</h2>
+            <p style="color:#ccc;margin-bottom:32px;font-size:16px;">
               Click the button below to reset your password. This link will expire in 1 hour.
             </p>
-            <a href="${resetUrl}" style="display:inline-block;padding:12px 32px;background:#111;color:#fff;text-decoration:none;border-radius:6px;font-weight:bold;font-size:16px;">
+            <a href="${resetUrl}" style="display:inline-block;padding:12px 32px;background:#fbbf24;color:#111;text-decoration:none;border-radius:6px;font-weight:bold;font-size:16px;">
               Reset Password
             </a>
             <p style="color:#888;margin-top:32px;font-size:12px;">

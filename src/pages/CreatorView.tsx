@@ -975,6 +975,13 @@ const CreatorView: React.FC = () => {
     if (editingTrailData) {
       try {
         const trail = JSON.parse(editingTrailData);
+        console.log('🔄 Loading trail from localStorage:', {
+          id: trail.id,
+          title: trail.title,
+          hasSteps: !!trail.steps,
+          stepsCount: trail.steps?.length || 0,
+          steps: trail.steps
+        });
         setTrailTitle(trail.title);
         setTrailDescription(trail.description);
         setSuggestedInvestment(trail.suggestedInvestment || 0);
@@ -997,6 +1004,17 @@ const CreatorView: React.FC = () => {
         if (trail.steps && trail.steps.length > 0) {
           setCurrentStepIndex(0);
           setEditingStepId(trail.steps[0].id);
+        } else {
+          // If trail has no steps, create initial steps
+          console.log('🆕 Creating initial steps for existing trail with no steps');
+          const initialStepId = `step-${Date.now()}`;
+          const initialSteps = [
+            { id: initialStepId, title: '', content: '', type: 'video', source: '', thumbnailUrl: '', isSaved: false, trail_id: trail.id, step_index: 0, created_at: new Date().toISOString() },
+            { id: 'reward', title: '', content: '', type: 'reward', source: '', thumbnailUrl: '', isSaved: false, trail_id: trail.id, step_index: 1, created_at: new Date().toISOString() }
+          ];
+          setSteps(initialSteps);
+          setEditingStepId(initialStepId);
+          setCurrentStepIndex(0);
         }
       } catch (error) {
         console.error('Error loading trail data:', error);
@@ -1004,6 +1022,7 @@ const CreatorView: React.FC = () => {
     } else {
       // Start with one step and a reward if none exist
       if (steps.length === 0 && !showModal) {
+        console.log('🆕 Creating initial steps via useEffect fallback');
         const initialStepId = `step-${Date.now()}`;
         setSteps([
           { id: initialStepId, title: '', content: '', type: 'video', source: '', thumbnailUrl: '', isSaved: false, trail_id: '', step_index: 0, created_at: new Date().toISOString() },
@@ -1042,6 +1061,17 @@ const CreatorView: React.FC = () => {
       setCurrentQuestion(currentQuestion + 1);
     } else {
       setShowModal(false);
+      
+      // Create initial steps after completing modal setup for new trails
+      if (!editingTrailId && steps.length === 0) {
+        console.log('🆕 Creating initial steps after modal completion');
+        const initialStepId = `step-${Date.now()}`;
+        setSteps([
+          { id: initialStepId, title: '', content: '', type: 'video', source: '', thumbnailUrl: '', isSaved: false, trail_id: '', step_index: 0, created_at: new Date().toISOString() },
+          { id: 'reward', title: '', content: '', type: 'reward', source: '', thumbnailUrl: '', isSaved: false, trail_id: '', step_index: 0, created_at: new Date().toISOString() }
+        ]);
+        setEditingStepId(initialStepId);
+      }
     }
   };
 
@@ -1209,13 +1239,18 @@ const CreatorView: React.FC = () => {
           <h3 className="text-2xl font-semibold text-gray-900 mb-4 text-left">
             {question.question}
           </h3>
-          {question.id === 'title' && (
-             <Input
-             value={trailTitle}
-             onChange={(e) => setTrailTitle(e.target.value)}
-             placeholder={question.placeholder}
-             className="w-full text-left [&]:text-[1.125rem] [&]:md:text-[1.125rem]"
-           />
+                    {question.id === 'title' && (
+            <Input
+              value={trailTitle}
+              onChange={(e) => setTrailTitle(e.target.value)}
+              placeholder={question.placeholder}
+              className="w-full text-left [&]:text-[1.125rem] [&]:md:text-[1.125rem]"
+              onFocus={(e) => {
+                // Select all text when focused for easy editing
+                setTimeout(() => (e.target as HTMLInputElement).select(), 0);
+              }}
+              onDoubleClick={(e) => (e.target as HTMLInputElement).select()}
+            />
           )}
           {question.id === 'description' && (
             <Textarea
@@ -1224,6 +1259,11 @@ const CreatorView: React.FC = () => {
               placeholder={question.placeholder}
               rows={4}
               className="w-full text-left [&]:text-[1.125rem] [&]:md:text-[1.125rem]"
+              onFocus={(e) => {
+                // Select all text when focused for easy editing
+                setTimeout(() => (e.target as HTMLTextAreaElement).select(), 0);
+              }}
+              onDoubleClick={(e) => (e.target as HTMLTextAreaElement).select()}
             />
           )}
           {question.id === 'investment' && (
@@ -1231,10 +1271,18 @@ const CreatorView: React.FC = () => {
               <span className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-500 [&]:text-[1.125rem] [&]:md:text-[1.125rem] min-w-[1.5rem] text-right">{getCurrencySymbol(trailCurrency)}</span>
               <Input
                 type="number"
-                value={suggestedInvestment}
-                onChange={(e) => setSuggestedInvestment(Number(e.target.value) || 0)}
+                value={editingTrailId && suggestedInvestment > 0 ? suggestedInvestment : (suggestedInvestment === 0 ? '' : suggestedInvestment)}
+                onChange={(e) => {
+                  const newValue = Number(e.target.value) || 0;
+                  setSuggestedInvestment(newValue);
+                }}
                 placeholder={question.placeholder}
                 className="pl-12 text-left [&]:text-[1.125rem] [&]:md:text-[1.125rem]"
+                onFocus={(e) => {
+                  // Select all text when focused for easy editing
+                  setTimeout(() => (e.target as HTMLInputElement).select(), 0);
+                }}
+                onDoubleClick={(e) => (e.target as HTMLInputElement).select()}
               />
             </div>
           )}
@@ -1258,10 +1306,18 @@ const CreatorView: React.FC = () => {
                 <span className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-500 [&]:text-[1.125rem] [&]:md:text-[1.125rem] min-w-[1.5rem] text-right">{getCurrencySymbol(trailCurrency)}</span>
                 <Input
                   type="number"
-                  value={trailValue}
-                  onChange={(e) => setTrailValue(Number(e.target.value) || 0)}
+                  value={editingTrailId && trailValue > 0 ? trailValue : (trailValue === 0 ? '' : trailValue)}
+                  onChange={(e) => {
+                    const newValue = Number(e.target.value) || 0;
+                    setTrailValue(newValue);
+                  }}
                   placeholder={question.placeholder}
                   className="pl-12 text-left [&]:text-[1.125rem] [&]:md:text-[1.125rem]"
+                  onFocus={(e) => {
+                    // Select all text when focused for easy editing
+                    setTimeout(() => (e.target as HTMLInputElement).select(), 0);
+                  }}
+                  onDoubleClick={(e) => (e.target as HTMLInputElement).select()}
                 />
               </div>
             </div>
@@ -1344,7 +1400,14 @@ const CreatorView: React.FC = () => {
       };
 
       // Save to user's account
+      console.log('💾 Saving draft trail:', {
+        id: draftTrail.id,
+        title: draftTrail.title,
+        status: draftTrail.status,
+        type: 'draft'
+      });
       await saveUserTrail(draftTrail, 'draft');
+      console.log('💾 Draft trail saved successfully');
       
       // Remove from saved trails since user is now the creator
       if (typeof window !== 'undefined' && user) {
@@ -1526,7 +1589,10 @@ const CreatorView: React.FC = () => {
       isAuthenticated,
       subscriptionLoading,
       subscriptionStatus,
-      canCreate: canCreateTrails()
+      canCreate: canCreateTrails(),
+      isSubscribed: subscriptionStatus?.isSubscribed,
+      isTrialing: subscriptionStatus?.isTrialing,
+      status: subscriptionStatus?.status
     });
     
     if (!isAuthenticated) {

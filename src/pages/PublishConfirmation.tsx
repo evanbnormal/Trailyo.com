@@ -40,6 +40,13 @@ const PublishConfirmation: React.FC = () => {
           const trail = JSON.parse(publishedTrailData);
           console.log('📄 Found published trail in sessionStorage:', trail.title);
           console.log('🔗 Shareable link:', trail.shareableLink);
+          
+          // Generate shareable link if missing
+          if (!trail.shareableLink) {
+            trail.shareableLink = `${window.location.origin}/trail/${trail.id}`;
+            console.log('🔗 Generated missing shareable link:', trail.shareableLink);
+          }
+          
           setPublishedTrail(trail);
           // Clear the sessionStorage after use
           sessionStorage.removeItem('publishedTrail');
@@ -63,6 +70,13 @@ const PublishConfirmation: React.FC = () => {
         const latestTrail = published[published.length - 1];
         console.log('📄 Found latest trail from getUserTrails:', latestTrail.title);
         console.log('🔗 Shareable link:', latestTrail.shareableLink);
+        
+        // Generate shareable link if missing
+        if (!latestTrail.shareableLink) {
+          latestTrail.shareableLink = `${window.location.origin}/trail/${latestTrail.id}`;
+          console.log('🔗 Generated missing shareable link:', latestTrail.shareableLink);
+        }
+        
         setPublishedTrail(latestTrail);
       } else {
         // If no published trail found, redirect to profile
@@ -142,14 +156,20 @@ const PublishConfirmation: React.FC = () => {
           <div className="flex items-center gap-4 p-6 bg-gray-50 rounded-lg">
             <input
               type="text"
-              value={publishedTrail.shareableLink || ''}
+              value={publishedTrail.shareableLink || 'Loading...'}
               readOnly
               className="flex-1 bg-transparent border-none outline-none text-lg font-normal text-gray-700"
+              placeholder="Generating your shareable link..."
             />
             <Button size="sm" onClick={copyShareLink} className="h-12 w-12 p-0">
               <Copy className="h-6 w-6" />
             </Button>
           </div>
+          {!publishedTrail.shareableLink && (
+            <p className="text-sm text-red-500">
+              Debug: Trail ID: {publishedTrail.id}, Title: {publishedTrail.title}
+            </p>
+          )}
         </div>
 
         {/* Go to Profile Button */}

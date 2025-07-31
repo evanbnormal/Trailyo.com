@@ -40,7 +40,7 @@ interface PaymentMethod {
 }
 
 export default function SettingsPage() {
-  const { user } = useAuth();
+  const { user, logout } = useAuth();
   const { subscriptionStatus, isLoading: subscriptionLoading } = useSubscription();
   const { toast } = useToast();
   
@@ -56,6 +56,9 @@ export default function SettingsPage() {
   const [showDeletePaymentDialog, setShowDeletePaymentDialog] = useState(false);
   const [paymentMethodToDelete, setPaymentMethodToDelete] = useState<string | null>(null);
   const [editingPaymentMethod, setEditingPaymentMethod] = useState<PaymentMethod | null>(null);
+  const [showDeleteAccountDialog, setShowDeleteAccountDialog] = useState(false);
+  const [deleteConfirmationText, setDeleteConfirmationText] = useState('');
+  const [isDeleting, setIsDeleting] = useState(false);
   const [formData, setFormData] = useState({
     name: user?.name || '',
     email: user?.email || '',
@@ -173,7 +176,9 @@ export default function SettingsPage() {
         });
         setShowCancelDialog(false);
         // Refresh subscription status
-        window.location.reload();
+        if (typeof window !== 'undefined') {
+          window.location.reload();
+        }
       } else {
         throw new Error('Failed to cancel subscription');
       }
@@ -295,6 +300,61 @@ export default function SettingsPage() {
       day: 'numeric',
     });
   };
+
+  const handleDeleteAccount = async () => {
+    if (deleteConfirmationText !== 'DELETE MY ACCOUNT') {
+      toast({
+        title: "Confirmation Error",
+        description: "Please type exactly 'DELETE MY ACCOUNT' to confirm deletion.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    setIsDeleting(true);
+    try {
+      const response = await fetch('/api/user/delete-account', {
+        method: 'DELETE',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          userId: user?.id,
+          email: user?.email,
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to delete account');
+      }
+
+      toast({
+        title: "Account Deleted",
+        description: "Your account has been permanently deleted.",
+      });
+
+      // Properly log out the user and redirect to home
+      setTimeout(() => {
+        logout(() => {
+          if (typeof window !== 'undefined') {
+          window.location.href = '/';
+        }
+        });
+      }, 1500);
+
+    } catch (error) {
+      console.error('Account deletion error:', error);
+      toast({
+        title: "Deletion Failed",
+        description: "There was an error deleting your account. Please try again or contact support.",
+        variant: "destructive",
+      });
+      setIsDeleting(false); // Only reset loading state on error
+    }
+    // Don't reset isDeleting on success - keep it true until logout completes
+  };
+
+  const isDeleteConfirmationValid = deleteConfirmationText === 'DELETE MY ACCOUNT';
 
   return (
     <div className="container mx-auto py-8 px-4 max-w-4xl">
@@ -761,9 +821,74 @@ export default function SettingsPage() {
               <div className="p-4 border border-red-200 rounded-lg bg-red-50">
                 <h4 className="font-semibold text-red-800 mb-2">Delete Account</h4>
                 <p className="text-sm text-red-600 mb-4">
-                  Once you delete your account, there is no going back. Please be certain.
+                  Once you delete your account, there is no going back. This will permanently delete all your data, trails, and subscription information.
                 </p>
-                <Button variant="destructive">Delete Account</Button>
+                <AlertDialog open={showDeleteAccountDialog} onOpenChange={setShowDeleteAccountDialog}>
+                  <AlertDialogTrigger asChild>
+                    <Button variant="destructive">Delete Account</Button>
+                  </AlertDialogTrigger>
+                  <AlertDialogContent>
+                    <AlertDialogHeader>
+                      <AlertDialogTitle className="flex items-center gap-2">
+                        <AlertTriangle className="h-5 w-5 text-red-500" />
+                        Permanently Delete Account
+                      </AlertDialogTitle>
+                      <AlertDialogDescription asChild>
+                        <div className="space-y-4">
+                          <p>
+                            This action <strong>cannot be undone</strong>. This will permanently delete your account and remove all associated data.
+                          </p>
+                          <div className="p-3 bg-red-50 border border-red-200 rounded-md">
+                            <p className="text-sm text-red-800 font-medium mb-2">This will delete:</p>
+                            <ul className="text-sm text-red-700 space-y-1">
+                              <li>• Your user account and profile</li>
+                              <li>• All trails and content you've created</li>
+                              <li>• Your subscription and billing information</li>
+                              <li>• All account history and analytics</li>
+                            </ul>
+                          </div>
+                          <div className="space-y-2">
+                            <Label htmlFor="delete-confirmation" className="text-sm font-medium">
+                              To confirm deletion, type <span className="font-bold">"DELETE MY ACCOUNT"</span> below:
+                            </Label>
+                            <Input
+                              id="delete-confirmation"
+                              type="text"
+                              placeholder="Type: DELETE MY ACCOUNT"
+                              value={deleteConfirmationText}
+                              onChange={(e) => setDeleteConfirmationText(e.target.value)}
+                              className="border-red-300 focus:border-red-500"
+                            />
+                          </div>
+                        </div>
+                      </AlertDialogDescription>
+                    </AlertDialogHeader>
+                    <AlertDialogFooter>
+                      <AlertDialogCancel 
+                        onClick={() => {
+                          setDeleteConfirmationText('');
+                          setShowDeleteAccountDialog(false);
+                        }}
+                      >
+                        Cancel
+                      </AlertDialogCancel>
+                      <AlertDialogAction
+                        onClick={handleDeleteAccount}
+                        disabled={!isDeleteConfirmationValid || isDeleting}
+                        className="bg-red-600 hover:bg-red-700 focus:ring-red-600"
+                      >
+                        {isDeleting ? (
+                          <>
+                            <RefreshCw className="mr-2 h-4 w-4 animate-spin" />
+                            Deleting...
+                          </>
+                        ) : (
+                          'Delete Account Permanently'
+                        )}
+                      </AlertDialogAction>
+                    </AlertDialogFooter>
+                  </AlertDialogContent>
+                </AlertDialog>
               </div>
             </CardContent>
           </Card>

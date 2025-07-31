@@ -36,35 +36,107 @@ export async function POST(request: NextRequest) {
     const body = await request.json();
     const { trail, type } = body;
 
+    console.log('📝 Trail API POST called:', {
+      trailId: trail?.id,
+      title: trail?.title,
+      status: trail?.status,
+      type: type
+    });
+
+    console.log('📝 Full trail data received:', JSON.stringify(trail, null, 2));
+
     if (!trail || !trail.title) {
       return NextResponse.json({ error: 'Missing required fields' }, { status: 400 });
     }
 
-    // Create trail
-    const createdTrail = await db.trail.create({
-      data: {
-        title: trail.title,
-        description: trail.description || '',
-        creatorId: trail.creator_id || 'anonymous',
-        // isPublished: type === 'published', // Uncomment if you have isPublished
-        price: trail.price || null,
-        steps: trail.steps && trail.steps.length > 0 ? {
-          create: trail.steps.map((step: any, index: number) => ({
-            title: step.title,
-            content: step.content,
-            order: index,
-            // videoUrl: step.video_url || null, // Uncomment if you have videoUrl
-            // skipCost: step.skip_cost || null // Uncomment if you have skipCost
-          }))
-        } : undefined,
-      },
-      include: { steps: true },
+    // Check if trail already exists (for updates)
+    const existingTrail = await db.trail.findUnique({
+      where: { id: trail.id },
+      include: { steps: true }
     });
 
-    return NextResponse.json({ success: true, trail: createdTrail });
+    let savedTrail;
+    
+    try {
+      if (existingTrail) {
+        // Update existing trail
+        console.log(`Updating existing trail: ${trail.id}`);
+        
+        // Delete existing steps first
+        if (existingTrail.steps.length > 0) {
+          await db.trailStep.deleteMany({
+            where: { trailId: trail.id }
+          });
+        }
+        
+        // Update trail with new data
+        savedTrail = await db.trail.update({
+        where: { id: trail.id },
+        data: {
+          title: trail.title,
+          description: trail.description || '',
+          thumbnailUrl: trail.thumbnailUrl || null,
+          trailValue: trail.trailValue || null,
+          suggestedInvestment: trail.suggestedInvestment || null,
+          trailCurrency: trail.trailCurrency || 'USD',
+          steps: trail.steps && trail.steps.length > 0 ? {
+            create: trail.steps.map((step: any, index: number) => ({
+              title: step.title,
+              content: step.content,
+              order: index,
+              type: step.type || 'article',
+              source: step.source || null,
+            }))
+          } : undefined,
+        },
+        include: { steps: true },
+      });
+    } else {
+      // Create new trail
+      console.log(`Creating new trail: ${trail.id}`);
+      savedTrail = await db.trail.create({
+        data: {
+          id: trail.id, // Use the provided ID
+          title: trail.title,
+          description: trail.description || '',
+          creatorId: trail.creator_id || trail.creatorId || 'anonymous',
+          thumbnailUrl: trail.thumbnailUrl || null,
+          trailValue: trail.trailValue || null,
+          suggestedInvestment: trail.suggestedInvestment || null,
+          trailCurrency: trail.trailCurrency || 'USD',
+          steps: trail.steps && trail.steps.length > 0 ? {
+            create: trail.steps.map((step: any, index: number) => ({
+              title: step.title,
+              content: step.content,
+              order: index,
+              type: step.type || 'article',
+              source: step.source || null,
+            }))
+          } : undefined,
+        },
+        include: { steps: true },
+      });
+    }
+    } catch (dbError) {
+      console.error('❌ Database operation failed:', dbError);
+      console.error('❌ Trail data that failed:', JSON.stringify(trail, null, 2));
+      throw new Error(`Database error: ${dbError.message}`);
+    }
+
+    console.log('✅ Trail saved successfully:', {
+      id: savedTrail.id,
+      title: savedTrail.title,
+      status: savedTrail.status,
+      creatorId: savedTrail.creatorId
+    });
+
+    return NextResponse.json({ success: true, trail: savedTrail });
   } catch (error) {
     console.error('Error creating trail:', error);
-    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
+    return NextResponse.json({ 
+      error: error.message || 'Internal server error',
+      details: error.toString()
+    }, { status: 500 });
   }
 }
 

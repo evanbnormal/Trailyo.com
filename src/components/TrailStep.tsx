@@ -33,16 +33,20 @@ const TrailStep: React.FC<TrailStepProps> = ({
     // Only setup YouTube player API if this is a video step
     if (step.type === 'video' && iframeRef.current) {
       // Add YouTube API script if it doesn't exist
-      if (!window.YT) {
-        const tag = document.createElement('script');
-        tag.src = 'https://www.youtube.com/iframe_api';
-        const firstScriptTag = document.getElementsByTagName('script')[0];
-        firstScriptTag.parentNode?.insertBefore(tag, firstScriptTag);
+      if (typeof window !== 'undefined' && !window.YT) {
+                      const tag = typeof document !== 'undefined' ? document.createElement('script') : null;
+    if (tag && typeof document !== 'undefined') {
+      tag.src = 'https://www.youtube.com/iframe_api';
+      const firstScriptTag = typeof document !== 'undefined' ? document.getElementsByTagName('script')[0] : null;
+      if (firstScriptTag && firstScriptTag.parentNode) {
+        firstScriptTag.parentNode.insertBefore(tag, firstScriptTag);
+      }
+    }
       }
 
       // Function to initialize the YouTube player
       const initYouTubePlayer = () => {
-        if (window.YT && window.YT.Player && iframeRef.current) {
+        if (typeof window !== 'undefined' && window.YT && window.YT.Player && iframeRef.current) {
           const videoId = getYouTubeVideoId(step.source || '');
           
           // Create a new player
@@ -61,11 +65,13 @@ const TrailStep: React.FC<TrailStepProps> = ({
       };
 
       // Initialize player when API is ready
-      if (window.YT && window.YT.Player) {
+      if (typeof window !== 'undefined' && window.YT && window.YT.Player) {
         initYouTubePlayer();
       } else {
         // If the API isn't loaded yet, set up callback
-        window.onYouTubeIframeAPIReady = initYouTubePlayer;
+        if (typeof window !== 'undefined') {
+          window.onYouTubeIframeAPIReady = initYouTubePlayer;
+        }
       }
     }
   }, [step]);

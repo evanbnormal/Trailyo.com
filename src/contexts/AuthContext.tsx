@@ -372,11 +372,13 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       // Convert blob URLs before saving
       const convertedTrail = await convertBlobUrlsInTrail(trail);
       
-      // Save to API with proper user ID
+      // Save to API with proper user ID and required fields
       const trailWithUserId = {
         ...convertedTrail,
         creator_id: user.id,
-        creatorId: user.id
+        creatorId: user.id,
+        updatedAt: new Date().toISOString(),
+        createdAt: convertedTrail.createdAt || new Date().toISOString()
       };
       
       const response = await fetch('/api/trails', {
@@ -391,9 +393,10 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       });
 
       if (!response.ok) {
-        const errorData = await response.json();
-        console.error('❌ API trail save failed:', response.status, errorData);
-        throw new Error(`Trail save failed: ${response.status} - ${errorData.error || 'Unknown error'}`);
+        const errorText = await response.text();
+        console.error('❌ API trail save failed:', response.status, errorText);
+        console.error('❌ Trail data being sent:', JSON.stringify(trailWithUserId, null, 2));
+        throw new Error(`Trail save failed: ${response.status} - ${errorText}`);
       }
 
       const result = await response.json();
@@ -436,18 +439,18 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
           const drafts = JSON.parse(localStorage.getItem(draftKey) || '[]');
           const existingIndex = drafts.findIndex((t: any) => t.id === trail.id);
           if (existingIndex >= 0) {
-            drafts[existingIndex] = convertedTrail;
+            drafts[existingIndex] = trailWithUserId;
           } else {
-            drafts.push(convertedTrail);
+            drafts.push(trailWithUserId);
           }
           localStorage.setItem(draftKey, JSON.stringify(drafts));
         } else {
           const published = JSON.parse(localStorage.getItem(publishedKey) || '[]');
           const existingIndex = published.findIndex((t: any) => t.id === trail.id);
           if (existingIndex >= 0) {
-            published[existingIndex] = convertedTrail;
+            published[existingIndex] = trailWithUserId;
           } else {
-            published.push(convertedTrail);
+            published.push(trailWithUserId);
           }
           localStorage.setItem(publishedKey, JSON.stringify(published));
         }

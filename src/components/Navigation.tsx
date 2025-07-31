@@ -15,6 +15,14 @@ const Navigation: React.FC = () => {
   const navigate = useNavigate();
   const { user, isAuthenticated, logout } = useAuth();
   const { subscriptionStatus, canCreateTrails, startSubscription } = useSubscription();
+  
+  // Debug subscription status in navigation
+  console.log('🔍 Navigation subscription status:', {
+    isSubscribed: subscriptionStatus.isSubscribed,
+    isTrialing: subscriptionStatus.isTrialing,
+    status: subscriptionStatus.status,
+    canCreateTrails: canCreateTrails()
+  });
   const [showLoginModal, setShowLoginModal] = useState(false);
   const [showSubscriptionModal, setShowSubscriptionModal] = useState(false);
 
@@ -63,7 +71,9 @@ const Navigation: React.FC = () => {
                       {canCreateTrails() ? (
                         <>
                           <Crown className="h-4 w-4 text-amber-500" />
-                          <span className="text-xs text-amber-600 font-medium">Creator</span>
+                          <span className="text-xs text-amber-600 font-medium">
+                            {subscriptionStatus.isTrialing ? 'Creator (Trial)' : 'Creator'}
+                          </span>
                         </>
                       ) : (
                         <>

@@ -72,7 +72,7 @@ const TrailViewer: React.FC<TrailViewerProps> = ({ trail }) => {
   };
 
   const initializeYouTubePlayer = (stepIndex: number, videoId: string) => {
-    if (window.YT && window.YT.Player) {
+          if (typeof window !== 'undefined' && window.YT && window.YT.Player) {
       const player = new window.YT.Player(`youtube-player-${stepIndex}`, {
         videoId,
         height: '100%',
@@ -84,7 +84,7 @@ const TrailViewer: React.FC<TrailViewerProps> = ({ trail }) => {
         },
         events: {
           onStateChange: (event: any) => {
-            if (event.data === window.YT.PlayerState.PLAYING) {
+            if (typeof window !== 'undefined' && event.data === window.YT.PlayerState.PLAYING) {
               const interval = setInterval(() => {
                 const currentTime = player.getCurrentTime();
                 const duration = player.getDuration();
@@ -114,11 +114,15 @@ const TrailViewer: React.FC<TrailViewerProps> = ({ trail }) => {
   };
 
   useEffect(() => {
-    if (!window.YT) {
-      const tag = document.createElement('script');
-      tag.src = 'https://www.youtube.com/iframe_api';
-      const firstScriptTag = document.getElementsByTagName('script')[0];
-      firstScriptTag.parentNode?.insertBefore(tag, firstScriptTag);
+    if (typeof window !== 'undefined' && !window.YT) {
+      const tag = typeof document !== 'undefined' ? document.createElement('script') : null;
+      if (tag && typeof document !== 'undefined') {
+        tag.src = 'https://www.youtube.com/iframe_api';
+        const firstScriptTag = typeof document !== 'undefined' ? document.getElementsByTagName('script')[0] : null;
+        if (firstScriptTag && firstScriptTag.parentNode) {
+          firstScriptTag.parentNode.insertBefore(tag, firstScriptTag);
+        }
+      }
     }
 
     if (isOverviewMode) {

@@ -18,22 +18,24 @@ const Home: React.FC = () => {
   const searchParams = typeof window !== 'undefined' ? new URLSearchParams(window.location.search) : null;
 
   useEffect(() => {
-    if (searchParams && searchParams.get('showLogin') === '1') {
-      setShowLoginModal(true);
-      // Optionally, remove the param from the URL after opening
-      const url = new URL(window.location.href);
-      url.searchParams.delete('showLogin');
-      window.history.replaceState({}, '', url.pathname + url.search);
-    }
-    
-    // Handle email confirmation - just clean up URL params silently
-    if (searchParams && searchParams.get('confirmed') === 'true') {
-      // Remove the params from the URL silently
-      const url = new URL(window.location.href);
-      url.searchParams.delete('confirmed');
-      url.searchParams.delete('email');
-      url.searchParams.delete('autoLogin');
-      window.history.replaceState({}, '', url.pathname + url.search);
+    if (typeof window !== 'undefined' && searchParams) {
+      if (searchParams.get('showLogin') === '1') {
+        setShowLoginModal(true);
+        // Optionally, remove the param from the URL after opening
+        const url = new URL(window.location.href);
+        url.searchParams.delete('showLogin');
+        window.history.replaceState({}, '', url.pathname + url.search);
+      }
+      
+      // Handle email confirmation - just clean up URL params silently
+      if (searchParams.get('confirmed') === 'true') {
+        // Remove the params from the URL silently
+        const url = new URL(window.location.href);
+        url.searchParams.delete('confirmed');
+        url.searchParams.delete('email');
+        url.searchParams.delete('autoLogin');
+        window.history.replaceState({}, '', url.pathname + url.search);
+      }
     }
   }, []);
 
@@ -57,7 +59,7 @@ const Home: React.FC = () => {
       <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 flex items-center justify-center">
         <div className="text-center max-w-2xl mx-auto px-6">
           <h1 className="text-5xl font-bold text-gray-900 mb-6">
-            Converting attention into currency
+            Converting 👀 into 💰.
           </h1>
           <p className="text-xl text-gray-600 mb-8">
             Create engaging learning trails and earn from your audience's attention

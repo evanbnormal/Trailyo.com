@@ -1,16 +1,9 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from './ui/dialog';
 import { Button } from './ui/button';
-import { Crown, Check, Zap } from 'lucide-react';
+import { useStripe, useElements, CardElement, Elements } from '@stripe/react-stripe-js';
 import { loadStripe } from '@stripe/stripe-js';
-import {
-  Elements,
-  PaymentElement,
-  useStripe,
-  useElements,
-} from '@stripe/react-stripe-js';
-import { SubscriptionService } from '../lib/subscription';
-import { useAuth } from '../contexts/AuthContext';
+import { X, CreditCard } from 'lucide-react';
 
 const stripePromise = loadStripe(process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY!);
 
@@ -18,130 +11,99 @@ interface SubscriptionPaymentModalProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   clientSecret: string;
-  setupIntentId: string;
-  onSuccess: () => void | Promise<void>;
+  onSuccess: (setupIntentId: string) => void;
   onError: (error: string) => void;
 }
 
 const PaymentForm: React.FC<{
-  setupIntentId: string;
   clientSecret: string;
-  onSuccess: () => void | Promise<void>;
+  onSuccess: (setupIntentId: string) => void;
   onError: (error: string) => void;
-}> = ({ setupIntentId, clientSecret, onSuccess, onError }) => {
+}> = ({ clientSecret, onSuccess, onError }) => {
+  const [isProcessing, setIsProcessing] = useState(false);
   const stripe = useStripe();
   const elements = useElements();
-  const { user } = useAuth();
-  const [isLoading, setIsLoading] = useState(false);
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const handleSubmit = async (event: React.FormEvent) => {
+    event.preventDefault();
 
-    if (!stripe || !elements || !user?.email) {
-      console.error('Missing required data:', { stripe: !!stripe, elements: !!elements, email: user?.email });
+    if (!stripe || !elements) {
+      onError('Payment system not ready. Please try again.');
       return;
     }
 
-    setIsLoading(true);
-    console.log('Starting payment setup...');
+    const cardElement = elements.getElement(CardElement);
+    if (!cardElement) {
+      onError('Payment form not ready. Please try again.');
+      return;
+    }
+
+    setIsProcessing(true);
 
     try {
-      // First, submit the elements to collect payment details
-      const { error: submitError } = await elements.submit();
+      console.log('🔐 Confirming secure payment setup...');
       
-      if (submitError) {
-        console.error('Elements submit error:', submitError);
-        onError(submitError.message || 'Payment details invalid');
-        return;
-      }
-
-      console.log('Elements submitted successfully, confirming setup...');
-
-      // Then confirm the setup intent
-      const { error } = await stripe.confirmSetup({
-        elements,
-        clientSecret,
-        confirmParams: {
-          return_url: `${window.location.origin}/payment-success`,
-        },
+      // Confirm the setup intent with the secure client secret
+      const { error, setupIntent } = await stripe.confirmCardSetup(clientSecret, {
+        payment_method: {
+          card: cardElement,
+        }
       });
 
       if (error) {
-        console.error('Stripe setup error:', error);
+        console.error('❌ Payment setup failed:', error);
         onError(error.message || 'Payment setup failed');
         return;
       }
 
-      console.log('Payment setup successful, waiting for setup intent to be ready...');
-
-      // Wait a moment for the setup intent to be fully processed
-      await new Promise(resolve => setTimeout(resolve, 2000));
-
-      // Get customer ID
-      const customerResponse = await fetch('/api/stripe/create-customer', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ email: user.email }),
-      });
-
-      if (!customerResponse.ok) {
-        throw new Error('Failed to get customer ID');
+      if (setupIntent?.status === 'succeeded') {
+        console.log('✅ Payment setup succeeded');
+        onSuccess(setupIntent.id);
+      } else {
+        console.error('❌ Unexpected setup intent status:', setupIntent?.status);
+        onError('Payment setup incomplete');
       }
 
-      const { customerId } = await customerResponse.json();
-      console.log('Customer ID retrieved:', customerId);
-
-      // Create the subscription
-      console.log('About to create subscription with:', { customerId, email: user.email, setupIntentId, userId: user.id });
-      const result = await SubscriptionService.confirmSubscription(customerId, user.email, setupIntentId, user.id);
-      console.log('Subscription creation result:', result);
-      
-      console.log('Subscription created successfully');
-      await onSuccess();
     } catch (error) {
-      console.error('Subscription error:', error);
-      onError('Failed to create subscription. Please try again.');
+      console.error('❌ Payment processing error:', error);
+      onError('Payment processing failed');
     } finally {
-      setIsLoading(false);
+      setIsProcessing(false);
     }
   };
 
   return (
     <form onSubmit={handleSubmit} className="space-y-6">
-      <div className="bg-gray-50 rounded-lg p-4">
-        <div className="flex items-center justify-center text-yellow-600 font-semibold mb-2">
-          <Zap className="h-4 w-4 mr-2" />
-          14-Day Free Trial
+      <div>
+        <label className="block text-sm font-medium text-gray-700 mb-2">
+          Payment Method
+        </label>
+        <div className="border rounded-lg p-4 bg-gray-50">
+          <CardElement
+            options={{
+              style: {
+                base: {
+                  fontSize: '16px',
+                  color: '#424770',
+                  '::placeholder': {
+                    color: '#aab7c4',
+                  },
+                },
+              },
+            }}
+          />
         </div>
-        <p className="text-sm text-gray-600 text-center">
-          No charge today • Cancel anytime • $29.99/month after trial
+        <p className="text-xs text-gray-500 mt-2">
+          Your payment information is securely processed by Stripe. Start your 14-day free trial now.
         </p>
-      </div>
-
-      <div className="space-y-4">
-        <div className="min-h-[180px]">
-          <PaymentElement />
-        </div>
       </div>
 
       <Button
         type="submit"
-        disabled={!stripe || isLoading}
-        className="w-full bg-gradient-to-r from-yellow-500 to-amber-600 hover:from-yellow-600 hover:to-amber-700 text-white font-semibold py-3 text-lg rounded-lg"
+        className="w-full"
+        disabled={!stripe || isProcessing}
       >
-        {isLoading ? (
-          <div className="flex items-center">
-            <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white mr-2"></div>
-            Setting up subscription...
-          </div>
-        ) : (
-          <>
-            <Crown className="h-5 w-5 mr-2" />
-            Start Free Trial ($0 Today)
-          </>
-        )}
+        {isProcessing ? 'Processing...' : 'Start Free Trial'}
       </Button>
     </form>
   );
@@ -151,57 +113,49 @@ const SubscriptionPaymentModal: React.FC<SubscriptionPaymentModalProps> = ({
   open,
   onOpenChange,
   clientSecret,
-  setupIntentId,
   onSuccess,
-  onError,
+  onError
 }) => {
-  const [stripeOptions, setStripeOptions] = useState<any>(null);
-
-  useEffect(() => {
-    if (clientSecret) {
-      setStripeOptions({
-        clientSecret,
-        appearance: {
-          theme: 'stripe',
-          variables: {
-            colorPrimary: '#f59e0b',
-          },
-        },
-      });
-    }
-  }, [clientSecret]);
-
-  if (!stripeOptions) {
+  if (!clientSecret) {
     return null;
   }
 
+  const stripeOptions = {
+    clientSecret,
+    appearance: {
+      theme: 'stripe' as const,
+      variables: {
+        colorPrimary: '#f59e0b',
+      },
+    },
+  };
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-lg max-h-[90vh] overflow-y-auto bg-white border border-gray-100 shadow-lg animate-fade-in">
-        <DialogHeader className="pb-4">
-          <div className="flex items-center mb-2">
-            <div className="bg-gradient-to-r from-yellow-500 to-amber-600 p-2 rounded-full mr-3">
-              <Crown className="h-6 w-6 text-white" />
-            </div>
-            <DialogTitle className="text-2xl font-bold text-gray-900">
-              Start Your Free Trial
+      <DialogContent className="max-w-md">
+        <DialogHeader>
+          <div className="flex items-center justify-between">
+            <DialogTitle className="flex items-center">
+              <CreditCard className="h-5 w-5 mr-2" />
+              Secure Payment Setup
             </DialogTitle>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => onOpenChange(false)}
+            >
+              <X className="h-4 w-4" />
+            </Button>
           </div>
-          <p className="text-gray-600">
-            Enter your payment details to start your 14-day free trial
-          </p>
         </DialogHeader>
 
-        <div className="py-4">
-          <Elements stripe={stripePromise} options={stripeOptions}>
-            <PaymentForm 
-              setupIntentId={setupIntentId}
-              clientSecret={clientSecret}
-              onSuccess={onSuccess} 
-              onError={onError} 
-            />
-          </Elements>
-        </div>
+        <Elements stripe={stripePromise} options={stripeOptions}>
+          <PaymentForm 
+            clientSecret={clientSecret}
+            onSuccess={onSuccess} 
+            onError={onError} 
+          />
+        </Elements>
       </DialogContent>
     </Dialog>
   );

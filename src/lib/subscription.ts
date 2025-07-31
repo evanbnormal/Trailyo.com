@@ -10,74 +10,44 @@ export interface SubscriptionStatus {
   status: string;
 }
 
+export interface StartSubscriptionResponse {
+  clientSecret: string;
+  status: 'setup_required' | 'processing' | 'error';
+  message?: string;
+}
+
 export class SubscriptionService {
-  static async createSubscription(email: string, userId?: string): Promise<{ clientSecret: string; setupIntentId: string }> {
+  /**
+   * Start subscription process - Single secure endpoint
+   * Handles all server-side logic including customer creation, setup intent, etc.
+   */
+  static async startSubscription(email: string, userId: string, name?: string): Promise<StartSubscriptionResponse> {
     try {
-      // First, create or get customer
-      const customerResponse = await fetch('/api/stripe/create-customer', {
+      const response = await fetch('/api/subscriptions/start', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ email, userId }),
+        body: JSON.stringify({ email, userId, name }),
       });
 
-      if (!customerResponse.ok) {
-        throw new Error('Failed to create customer');
-      }
-
-      const { customerId } = await customerResponse.json();
-
-      // Create setup intent
-      const setupIntentResponse = await fetch('/api/subscriptions/create', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ customerId, email }),
-      });
-
-      if (!setupIntentResponse.ok) {
-        throw new Error('Failed to create setup intent');
-      }
-
-      const { clientSecret, setupIntentId } = await setupIntentResponse.json();
-      return { clientSecret, setupIntentId };
-    } catch (error) {
-      console.error('Setup intent creation error:', error);
-      throw error;
-    }
-  }
-
-  static async confirmSubscription(customerId: string, email: string, setupIntentId: string, userId: string): Promise<{ subscriptionId: string; status: string }> {
-    try {
-      console.log('SubscriptionService.confirmSubscription called with:', { customerId, email, setupIntentId, userId });
-      
-      const response = await fetch('/api/subscriptions/confirm', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ customerId, email, setupIntentId, userId }),
-      });
-
-      console.log('Subscription confirm response status:', response.status);
-      
       if (!response.ok) {
-        const errorText = await response.text();
-        console.error('Subscription confirm error response:', errorText);
-        throw new Error(`Failed to confirm subscription: ${errorText}`);
+        const errorData = await response.json();
+        throw new Error(errorData.message || 'Failed to start subscription');
       }
 
-      const result = await response.json();
-      console.log('Subscription confirm result:', result);
+      const result: StartSubscriptionResponse = await response.json();
       return result;
     } catch (error) {
-      console.error('Subscription confirmation error:', error);
+      console.error('❌ Start subscription error:', error);
       throw error;
     }
   }
 
+  /**
+   * Get subscription status from database (single source of truth)
+   * No longer polls frequently - webhooks keep database updated
+   */
   static async getSubscriptionStatus(userId: string, email?: string): Promise<SubscriptionStatus> {
     try {
       const params = new URLSearchParams({ userId });
@@ -85,38 +55,31 @@ export class SubscriptionService {
         params.append('email', email);
       }
       
-      const response = await fetch(`/api/subscriptions/status?${params}`);
+      const url = `/api/subscriptions/status?${params}`;
+      console.log(`🌐 Making subscription API call to: ${url}`);
+      
+      const response = await fetch(url);
+      
+      console.log(`📡 Subscription API response:`, {
+        url,
+        ok: response.ok,
+        status: response.status,
+        statusText: response.statusText,
+      });
       
       if (!response.ok) {
-        throw new Error('Failed to get subscription status');
+        console.error(`❌ Subscription API error: ${response.status} ${response.statusText}`);
+        throw new Error(`Failed to get subscription status: ${response.status} ${response.statusText}`);
       }
 
       const status = await response.json();
-      
-      // Only store the status in localStorage if it's a valid subscription
-      // This prevents overwriting a stored subscription with "no subscription" from server
-      if (typeof window !== 'undefined') {
-        if (status.isSubscribed || status.isTrialing) {
-          localStorage.setItem(`subscription_${userId}`, JSON.stringify(status));
-        } else {
-          // Check if we already have a stored subscription
-          const storedStatus = localStorage.getItem(`subscription_${userId}`);
-          if (storedStatus) {
-            const parsedStatus = JSON.parse(storedStatus);
-            if (parsedStatus.isSubscribed || parsedStatus.isTrialing) {
-              // Return the stored subscription instead of the server response
-              return parsedStatus;
-            }
-          }
-          // Only store if we don't have a stored subscription
-          localStorage.setItem(`subscription_${userId}`, JSON.stringify(status));
-        }
-      }
-
+      console.log(`✅ Subscription status received:`, status);
       return status;
     } catch (error) {
-      console.error('Get subscription status error:', error);
-      // Default to free tier for new users
+      console.error('❌ Get subscription status error:', error);
+      console.log('🔄 Returning default free tier status due to error');
+      
+      // Return default free tier status on error
       return {
         isSubscribed: false,
         isTrialing: false,
@@ -125,41 +88,65 @@ export class SubscriptionService {
     }
   }
 
-  static async setupSubscriptionPayment(clientSecret: string): Promise<void> {
-    const stripe = await stripePromise;
-    if (!stripe) {
-      throw new Error('Stripe failed to load');
-    }
-
-    // For subscriptions with trial, we need to confirm the setup intent
-    const { error } = await stripe.confirmSetup({
-      clientSecret,
-      confirmParams: {
-        return_url: `${window.location.origin}/subscription-success`,
-      },
-    });
-
-    if (error) {
-      throw new Error(error.message);
-    }
-  }
-
-  static async cancelSubscription(subscriptionId: string): Promise<void> {
+  /**
+   * Cancel subscription - Server handles all Stripe operations
+   */
+  static async cancelSubscription(userId: string): Promise<{ success: boolean; message: string }> {
     try {
       const response = await fetch('/api/subscriptions/cancel', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ subscriptionId }),
+        body: JSON.stringify({ userId }),
       });
 
       if (!response.ok) {
-        throw new Error('Failed to cancel subscription');
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Failed to cancel subscription');
       }
+
+      const result = await response.json();
+      return { success: true, message: result.message };
     } catch (error) {
-      console.error('Cancel subscription error:', error);
+      console.error('❌ Cancel subscription error:', error);
       throw error;
     }
+  }
+
+  /**
+   * Confirm payment setup completion
+   * Called after Stripe Elements confirms the setup intent
+   */
+  static async confirmPaymentSetup(setupIntentId: string): Promise<{ success: boolean; message: string }> {
+    try {
+      // Just verify the setup intent was successful
+      // The webhook will handle subscription creation automatically
+      const response = await fetch('/api/subscriptions/verify-setup', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ setupIntentId }),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.message || 'Payment setup verification failed');
+      }
+
+      const result = await response.json();
+      return { success: true, message: result.message };
+    } catch (error) {
+      console.error('❌ Payment setup confirmation error:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Get Stripe instance for frontend payment handling
+   */
+  static async getStripe() {
+    return await stripePromise;
   }
 } 

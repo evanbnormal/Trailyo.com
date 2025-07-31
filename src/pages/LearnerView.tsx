@@ -1,6 +1,9 @@
 'use client'
 
 import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
+
+// SSR guard - only render on client
+const isClient = typeof window !== 'undefined';
 import { useParams, useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Button } from '@/components/ui/button';
@@ -11,10 +14,31 @@ import { ArrowLeft, ArrowRight, Check, Lock, Unlock, Gift, Expand, Shrink, Party
 import { useAuth } from '@/contexts/AuthContext';
 import { useToast } from '@/hooks/use-toast';
 import TrailProgress from '@/components/TrailProgress';
-import Confetti from 'react-confetti';
-import { useWindowSize } from 'react-use';
+import dynamic from 'next/dynamic';
+
+// Dynamically import confetti to avoid SSR issues
+const Confetti = dynamic(() => import('react-confetti'), { ssr: false });
+
+// Safe window size hook for SSR
+const useWindowSize = () => {
+  const [size, setSize] = useState({ width: 0, height: 0 });
+  
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const updateSize = () => {
+        setSize({ width: window.innerWidth, height: window.innerHeight });
+      };
+      updateSize();
+      window.addEventListener('resize', updateSize);
+      return () => window.removeEventListener('resize', updateSize);
+    }
+  }, []);
+  
+  return size;
+};
 import { analyticsService } from '@/lib/analytics';
 import { StripePayment } from '@/components/StripePayment';
+import { TipPaymentModal } from '@/components/TipPaymentModal';
 
 interface TrailStep {
   id: string;
@@ -45,6 +69,15 @@ interface Trail {
 }
 
 const LearnerView: React.FC = () => {
+  // Early return if SSR - prevent any browser API access during server rendering
+  if (!isClient) {
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <div className="text-lg">Loading trail...</div>
+      </div>
+    );
+  }
+
   const { trailId } = useParams<{ trailId: string }>();
   const navigate = useNavigate();
   const { getUserTrails, saveUserTrail, isAuthenticated, user } = useAuth();
@@ -63,6 +96,7 @@ const LearnerView: React.FC = () => {
   const [skipToStep, setSkipToStep] = useState<number | null>(null);
   const [trailLoaded, setTrailLoaded] = useState(false);
   const [tipAmount, setTipAmount] = useState(25); // Move tipAmount state to top level
+  const [showTipModal, setShowTipModal] = useState(false);
   const [tipCompleted, setTipCompleted] = useState(false); // Track if user has tipped or skipped
   const [showStripePayment, setShowStripePayment] = useState(false);
   const [skipPaymentAmount, setSkipPaymentAmount] = useState(0);
@@ -149,9 +183,43 @@ const LearnerView: React.FC = () => {
       
       const foundTrail = allUserTrails.find(t => t.id === actualTrailId);
       
-      // If not found in user's trails, search through all published trails from all users
+      // If not found in user's trails, search through saved trails and all users  
       if (!foundTrail) {
-        console.log('Trail not found in user trails, searching all users...');
+        console.log('Trail not found in user trails, searching saved trails and all users...');
+        
+        // First check current user's saved trails (from learner view)
+        if (user) {
+          const savedTrails = JSON.parse(localStorage.getItem(`user_${user.id}_saved`) || '[]');
+          console.log('Current user saved trails:', savedTrails.map(t => ({ id: t.id, title: t.title })));
+          const savedTrail = savedTrails.find(t => t.id === actualTrailId);
+          if (savedTrail) {
+            console.log('Found trail in current user saved trails');
+            if (isMounted) {
+              setTrail(savedTrail);
+              setTrailLoaded(true);
+              
+              // Load saved progress
+              if (savedTrail.currentStepIndex !== undefined) {
+                setCurrentStepIndex(savedTrail.currentStepIndex);
+              }
+              if (savedTrail.progressStepIndex !== undefined) {
+                setProgressStepIndex(savedTrail.progressStepIndex);
+              }
+              if (savedTrail.completedSteps) {
+                setCompletedSteps(new Set(savedTrail.completedSteps));
+              }
+              if (savedTrail.videoWatchTime) {
+                setVideoWatchTime(savedTrail.videoWatchTime);
+              }
+              
+              // Track trail view
+              analyticsService.trackTrailView(actualTrailId, savedTrail.title);
+            }
+            return; // Exit early if found
+          }
+        }
+        
+        // Then search through all users' published trails
         const allUsers = JSON.parse(localStorage.getItem('users') || '[]');
         console.log('All users:', allUsers);
         
@@ -161,7 +229,12 @@ const LearnerView: React.FC = () => {
           const foundTrail = userPublished.find(t => t.id === actualTrailId);
           if (foundTrail) {
             console.log('Found trail in user:', user.id);
-            break;
+            if (isMounted) {
+              setTrail(foundTrail);
+              setTrailLoaded(true);
+              analyticsService.trackTrailView(actualTrailId, foundTrail.title);
+            }
+            return; // Exit early if found
           }
         }
       }
@@ -329,13 +402,13 @@ const LearnerView: React.FC = () => {
     const playerId = isOverviewMode ? `youtube-player-overview-${stepIndex}` : `youtube-player-${stepIndex}`;
     
     // Check if the DOM element exists
-    const element = document.getElementById(playerId);
+    const element = typeof document !== 'undefined' ? document.getElementById(playerId) : null;
     if (!element) {
       console.log(`Player element ${playerId} not found, skipping initialization`);
       return;
     }
 
-    if (window.YT && window.YT.Player) {
+    if (typeof window !== 'undefined' && window.YT && window.YT.Player) {
       console.log(`Initializing YouTube player for step ${stepIndex} with video ${videoId}`);
       
       const player = new window.YT.Player(playerId, {
@@ -350,7 +423,7 @@ const LearnerView: React.FC = () => {
         },
         events: {
           onStateChange: (event: any) => {
-            if (event.data === window.YT.PlayerState.PLAYING) {
+            if (typeof window !== 'undefined' && event.data === window.YT.PlayerState.PLAYING) {
               // Start tracking watch time
               if (!watchTimeRef.current[stepIndex]) {
                 watchTimeRef.current[stepIndex] = { startTime: Date.now(), totalWatched: 0, isPlaying: false };
@@ -382,12 +455,12 @@ const LearnerView: React.FC = () => {
                   }
                 }
               }, 1000);
-            } else if (event.data === window.YT.PlayerState.PAUSED) {
+            } else if (typeof window !== 'undefined' && event.data === window.YT.PlayerState.PAUSED) {
               // Pause tracking
               if (watchTimeRef.current[stepIndex]) {
                 watchTimeRef.current[stepIndex].isPlaying = false;
               }
-            } else if (event.data === window.YT.PlayerState.ENDED) {
+            } else if (typeof window !== 'undefined' && event.data === window.YT.PlayerState.ENDED) {
               // Video ended, mark as completed
               if (watchTimeRef.current[stepIndex]) {
                 watchTimeRef.current[stepIndex].isPlaying = false;
@@ -426,37 +499,45 @@ const LearnerView: React.FC = () => {
   }, []);
 
   useEffect(() => {
-    if (!window.YT) {
-      const tag = document.createElement('script');
-      tag.src = 'https://www.youtube.com/iframe_api';
-      const firstScriptTag = document.getElementsByTagName('script')[0];
-      firstScriptTag.parentNode?.insertBefore(tag, firstScriptTag);
+    if (typeof window !== 'undefined' && !window.YT) {
+      const tag = typeof document !== 'undefined' ? document.createElement('script') : null;
+      if (tag && typeof document !== 'undefined') {
+        tag.src = 'https://www.youtube.com/iframe_api';
+        const firstScriptTag = typeof document !== 'undefined' ? document.getElementsByTagName('script')[0] : null;
+        if (firstScriptTag && firstScriptTag.parentNode) {
+          firstScriptTag.parentNode.insertBefore(tag, firstScriptTag);
+        }
+      }
       
       // Set up the callback for when YouTube API is ready
-      window.onYouTubeIframeAPIReady = () => {
-        console.log('YouTube API ready');
-        // Trigger re-initialization when API becomes available
-        if (trail?.steps) {
-          if (isOverviewMode) {
-            trail.steps.forEach((step, index) => {
-              if (step.type === 'video' && step.source) {
-                const videoId = getYouTubeVideoId(step.source);
-                if (videoId) {
-                  setTimeout(() => initializeYouTubePlayer(index, videoId), 100);
+      if (typeof window !== 'undefined') {
+        window.onYouTubeIframeAPIReady = () => {
+          console.log('YouTube API ready');
+          // Trigger re-initialization when API becomes available
+          if (trail?.steps) {
+            if (isOverviewMode) {
+              trail.steps.forEach((step, index) => {
+                if (step.type === 'video' && step.source) {
+                  const videoId = getYouTubeVideoId(step.source);
+                  if (videoId) {
+                    setTimeout(() => initializeYouTubePlayer(index, videoId), 100);
+                  }
                 }
+              });
+            } else if (currentStep?.type === 'video' && currentStep?.source) {
+              const videoId = getYouTubeVideoId(currentStep.source);
+              if (videoId) {
+                setTimeout(() => initializeYouTubePlayer(currentStepIndex, videoId), 100);
               }
-            });
-          } else if (currentStep?.type === 'video' && currentStep?.source) {
-            const videoId = getYouTubeVideoId(currentStep.source);
-            if (videoId) {
-              setTimeout(() => initializeYouTubePlayer(currentStepIndex, videoId), 100);
             }
           }
-        }
-      };
+        };
+      }
     }
 
     // Initialize players for all video steps in overview mode
+    const timers: NodeJS.Timeout[] = [];
+    
     if (isOverviewMode && trail?.steps) {
       trail.steps.forEach((step, index) => {
         if (step.type === 'video' && step.source) {
@@ -466,8 +547,7 @@ const LearnerView: React.FC = () => {
             const timer = setTimeout(() => {
               initializeYouTubePlayer(index, videoId);
             }, 300);
-            
-            return () => clearTimeout(timer);
+            timers.push(timer);
           }
         }
       });
@@ -480,10 +560,14 @@ const LearnerView: React.FC = () => {
         const timer = setTimeout(() => {
           initializeYouTubePlayer(currentStepIndex, videoId);
         }, 500);
-        
-        return () => clearTimeout(timer);
+        timers.push(timer);
       }
     }
+    
+    // Cleanup function for all timers
+    return () => {
+      timers.forEach(timer => clearTimeout(timer));
+    };
   }, [currentStepIndex, currentStep?.source, currentStep?.type, isOverviewMode, trail?.steps]);
 
   const canProceed = currentStep?.type === 'video' ? 
@@ -540,6 +624,25 @@ const LearnerView: React.FC = () => {
     setCurrentStepIndex(nextStepIndex);
     setProgressStepIndex(Math.max(progressStepIndex, nextStepIndex - 1));
 
+    // Auto-save progress when moving to next step
+    if (isAuthenticated && user) {
+      const autoSavedTrail = {
+        ...trail,
+        active: true,
+        currentStepIndex: nextStepIndex,
+        progressStepIndex: Math.max(progressStepIndex, nextStepIndex - 1),
+        completedSteps: Array.from(newCompletedSteps),
+        videoWatchTime,
+        lastSavedAt: new Date().toISOString(),
+      };
+      
+      // Save to localStorage
+      const savedTrails = JSON.parse(localStorage.getItem(`user_${user.id}_saved`) || '[]');
+      const filteredSaved = savedTrails.filter((t: any) => t.id !== trail.id);
+      localStorage.setItem(`user_${user.id}_saved`, JSON.stringify([...filteredSaved, autoSavedTrail]));
+      console.log('🔄 Auto-saved progress at step:', nextStepIndex);
+    }
+
     // Confetti for reward step
     const nextStep = trail.steps[nextStepIndex];
     if (nextStep?.type === 'reward') {
@@ -566,7 +669,9 @@ const LearnerView: React.FC = () => {
     // If current step has a source and is not a video, open the link
     const currentStep = trail.steps[stepIndex];
     if (currentStep?.source && currentStep?.type !== 'video') {
-      window.open(currentStep.source, '_blank');
+      if (typeof window !== 'undefined') {
+        window.open(currentStep.source, '_blank');
+      }
     }
 
     const isLastStep = stepIndex === trail.steps.length - 1;
@@ -587,22 +692,24 @@ const LearnerView: React.FC = () => {
       // Smooth scroll to the next step card in overview mode
       if (isOverviewMode) {
         setTimeout(() => {
-          const nextStepElement = document.getElementById(`step-card-${nextStepIndex}`);
+          const nextStepElement = typeof document !== 'undefined' ? document.getElementById(`step-card-${nextStepIndex}`) : null;
           if (nextStepElement) {
             // Scroll to the next step card with more offset
             const headerHeight = 100; // Reduced header height for better positioning
             const elementTop = nextStepElement.offsetTop;
-            const currentScrollTop = window.pageYOffset || document.documentElement.scrollTop;
+            const currentScrollTop = typeof window !== 'undefined' ? (window.pageYOffset || (typeof document !== 'undefined' ? document.documentElement.scrollTop : 0)) : 0;
             
             // Always scroll down to the next step, ensuring it's well in view
             const targetScrollTop = elementTop - headerHeight;
             
             // Only scroll if we need to move down
             if (targetScrollTop > currentScrollTop) {
-              window.scrollTo({
-                top: targetScrollTop,
-                behavior: 'smooth'
-              });
+              if (typeof window !== 'undefined') {
+                window.scrollTo({
+                  top: targetScrollTop,
+                  behavior: 'smooth'
+                });
+              }
             }
           }
         }, 100); // Small delay to ensure state updates are processed
@@ -631,7 +738,9 @@ const LearnerView: React.FC = () => {
 
     // If current step has a source and is not a video, open the link
     if (currentStep?.source && currentStep?.type !== 'video') {
-      window.open(currentStep.source, '_blank');
+      if (typeof window !== 'undefined') {
+        window.open(currentStep.source, '_blank');
+      }
     }
 
     if (isLastStep) {
@@ -827,23 +936,16 @@ const LearnerView: React.FC = () => {
                   />
                 </div>
                 
-                <Button 
+                                <Button
                   className="bg-gradient-to-r from-yellow-500 to-amber-600 text-white hover:from-yellow-600 hover:to-amber-700 px-8 py-3 text-lg font-semibold shadow-lg w-80 flex items-center justify-center"
                   onClick={() => {
                     const finalTipAmount = tipAmount || trail?.suggestedInvestment || 25;
-                    
-                    // Track tip donation
-                    analyticsService.trackTipDonated(trail.id, finalTipAmount);
-                    
-                    toast({
-                      title: "Thank you!",
-                      description: `You've tipped $${finalTipAmount} to ${trail.creator || 'the creator'}.`,
-                    });
-                    setTipCompleted(true);
+                    setTipAmount(finalTipAmount);
+                    setShowTipModal(true);
                   }}
                 >
                   <Gift className="h-5 w-5 mr-2" />
-                  <span>Tip ${tipAmount || 0}</span>
+                  <span>Tip ${tipAmount || trail?.suggestedInvestment || 25}</span>
                 </Button>
               </div>
             </div>
@@ -871,7 +973,7 @@ const LearnerView: React.FC = () => {
 
   return (
     <>
-      {playConfetti && (
+      {typeof window !== 'undefined' && playConfetti && width > 0 && height > 0 && (
         <Confetti
           width={width}
           height={height}
@@ -1046,13 +1148,13 @@ const LearnerView: React.FC = () => {
                                   />
                                 </div>
                               )}
-                              <p className={`${step.type === 'reward' ? 'mb-6 text-amber-700 text-center text-lg' : 'mb-6 text-gray-600'}`}>
+                              <p className={`${step.type === 'reward' ? 'mb-8 text-amber-700 text-center text-lg' : 'mb-6 text-gray-600'}`}>
                                 {step.content}
                               </p>
                               
                               {/* Claim Reward button centered in content area for reward steps */}
                               {step.type === 'reward' && (
-                                <div className={`flex justify-center mt-6 ${isStepLocked(index) ? 'blur-[16px] pointer-events-none' : ''}`}>
+                                <div className={`flex justify-center mt-8 ${isStepLocked(index) ? 'blur-[16px] pointer-events-none' : ''}`}>
                                   <Button
                                     onClick={() => handleStepNext(index)}
                                     disabled={!canStepProceed(index)}
@@ -1271,13 +1373,13 @@ const LearnerView: React.FC = () => {
                               />
                             </div>
                           )}
-                          <p className={`${currentStep.type === 'reward' ? 'mb-6 text-amber-700 text-center text-lg' : 'mb-6 text-gray-600'}`}>
+                          <p className={`${currentStep.type === 'reward' ? 'mb-8 text-amber-700 text-center text-lg' : 'mb-6 text-gray-600'}`}>
                             {currentStep.content}
                           </p>
                           
                           {/* Claim Reward button centered in content area for reward steps */}
                           {currentStep.type === 'reward' && (
-                            <div className={`flex justify-center mt-6 ${isStepLocked(currentStepIndex) ? 'blur-[16px] pointer-events-none' : ''}`}>
+                            <div className={`flex justify-center mt-8 ${isStepLocked(currentStepIndex) ? 'blur-[16px] pointer-events-none' : ''}`}>
                               <Button
                                 onClick={() => handleFocusedNext()}
                                 disabled={!canStepProceed(currentStepIndex)}
@@ -1577,13 +1679,19 @@ const LearnerView: React.FC = () => {
             const { drafts, published } = userTrails;
             
             // Check if user is the creator of this trail
-            const isCreator = trail?.creator === user.id;
+            const isCreator = trail?.creatorId === user.id || (trail as any)?.creator_id === user.id;
             
             if (isCreator) {
               // If user is creator, save to drafts (their created trails)
               const allUserTrails = [...drafts, ...published];
               const filteredTrails = allUserTrails.filter((t: any) => t.id !== savedTrail.id);
               localStorage.setItem(`user_${user.id}_drafts`, JSON.stringify([...filteredTrails, savedTrail]));
+              
+              // IMPORTANT: Remove from saved trails since they're now the creator
+              const savedTrails = JSON.parse(localStorage.getItem(`user_${user.id}_saved`) || '[]');
+              const filteredSaved = savedTrails.filter((t: any) => t.id !== savedTrail.id);
+              localStorage.setItem(`user_${user.id}_saved`, JSON.stringify(filteredSaved));
+              console.log('🗑️ Removed trail from saved section (user is creator)');
             } else {
               // If user is not creator, save to saved trails (trails they're learning)
               const savedTrails = JSON.parse(localStorage.getItem(`user_${user.id}_saved`) || '[]');
@@ -1591,12 +1699,41 @@ const LearnerView: React.FC = () => {
               localStorage.setItem(`user_${user.id}_saved`, JSON.stringify([...filteredSaved, savedTrail]));
             }
             
+            console.log('💾 Manual save progress:', {
+              trailId: savedTrail.id,
+              currentStep: currentStepIndex,
+              progressStep: progressStepIndex,
+              completedSteps: Array.from(completedSteps),
+              isCreator,
+              userId: user.id
+            });
+            
             toast({ title: 'Progress saved!', description: 'You can resume this trail from your profile.', duration: 1000 });
           }}
         >
           Save Progress
         </Button>
       </div>
+
+      {/* Tip Payment Modal */}
+      <TipPaymentModal
+        isOpen={showTipModal}
+        onClose={() => setShowTipModal(false)}
+        amount={tipAmount || trail?.suggestedInvestment || 25}
+        trailId={trail?.id || ''}
+        creatorId={trail?.creator_id || ''}
+        creatorName={trail?.creator}
+        onSuccess={() => {
+          // Track tip donation
+          analyticsService.trackTipDonated(trail?.id || '', tipAmount || trail?.suggestedInvestment || 25);
+          
+          toast({
+            title: "Thank you!",
+            description: `You've successfully tipped $${tipAmount || trail?.suggestedInvestment || 25} to ${trail?.creator || 'the creator'}!`,
+          });
+          setTipCompleted(true);
+        }}
+      />
     </>
   );
 };

@@ -24,9 +24,10 @@ export async function POST(request: NextRequest) {
       subject: 'Test Email from Trailyo',
       text: 'This is a test email to verify SendGrid configuration.',
       html: `
-        <div style="background:#fff;padding:32px;text-align:center;font-family:sans-serif;">
-          <h2 style="color:#111;margin-bottom:16px;">Test Email</h2>
-          <p style="color:#444;">
+        <div style="background:#111;padding:32px 0;text-align:center;font-family:sans-serif;">
+          <img src="${process.env.BASE_URL || 'http://localhost:3000'}/Asset%2010newest.png" alt="Trailyo" style="height:48px;margin-bottom:24px;" />
+          <h2 style="color:#fff;margin-bottom:16px;font-size:24px;">Test Email</h2>
+          <p style="color:#ccc;margin-bottom:32px;font-size:16px;">
             This is a test email to verify that SendGrid is working correctly.
           </p>
           <p style="color:#888;margin-top:32px;font-size:12px;">

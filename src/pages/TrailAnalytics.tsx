@@ -93,13 +93,19 @@ const TrailAnalytics: React.FC = () => {
   // Check screen size for responsive behavior
   useEffect(() => {
     const checkScreenSize = () => {
-      setIsMobile(window.innerWidth < 1024); // lg breakpoint
+      setIsMobile(typeof window !== 'undefined' ? window.innerWidth < 1024 : false); // lg breakpoint
     };
     
     checkScreenSize();
-    window.addEventListener('resize', checkScreenSize);
+    if (typeof window !== 'undefined') {
+      window.addEventListener('resize', checkScreenSize);
+    }
     
-    return () => window.removeEventListener('resize', checkScreenSize);
+    return () => {
+      if (typeof window !== 'undefined') {
+        window.removeEventListener('resize', checkScreenSize);
+      }
+    };
   }, []);
 
   useEffect(() => {

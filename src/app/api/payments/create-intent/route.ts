@@ -15,7 +15,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const { amount, trailId, creatorId } = await request.json();
+    const { amount, trailId, creatorId, type = 'skip_payment' } = await request.json();
 
     if (!amount || amount <= 0) {
       return NextResponse.json(
@@ -37,7 +37,7 @@ export async function POST(request: NextRequest) {
       metadata: {
         trailId,
         creatorId,
-        type: 'skip_payment',
+        type, // Can be 'skip_payment' or 'tip'
       },
     });
 

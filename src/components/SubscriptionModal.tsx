@@ -4,7 +4,7 @@ import { Button } from './ui/button';
 import { Badge } from './ui/badge';
 import { Check, Star, Zap, Users, BarChart3, Crown, X } from 'lucide-react';
 import SubscriptionPaymentModal from './SubscriptionPaymentModal';
-import { useSubscription } from '../hooks/useSubscription';
+import { useSecureSubscription } from '../hooks/useSecureSubscription';
 import { useToast } from '../hooks/use-toast';
 import { useAuth } from '../contexts/AuthContext';
 
@@ -23,28 +23,37 @@ const SubscriptionModal: React.FC<SubscriptionModalProps> = ({
   const [activeCard, setActiveCard] = useState<'creator' | 'free'>('creator');
   const [showPaymentModal, setShowPaymentModal] = useState(false);
   const [clientSecret, setClientSecret] = useState<string>('');
-  const [setupIntentId, setSetupIntentId] = useState<string>('');
-  const { startSubscription, loadSubscriptionStatus } = useSubscription();
+  const [sessionId, setSessionId] = useState<string>('');
+  const { isLoading: secureLoading, startSecureSubscription, verifySecureSubscription } = useSecureSubscription();
   const { toast } = useToast();
   const { user } = useAuth();
 
   const handleSubscribe = async () => {
+    if (!user?.email || !user?.id) {
+      toast({
+        title: "Authentication Required",
+        description: "Please log in to subscribe.",
+        variant: "destructive",
+      });
+      return;
+    }
+
     setIsLoading(true);
     try {
-      // Store user data for payment success page
-      if (user) {
-        localStorage.setItem('userData', JSON.stringify(user));
-      }
+      console.log('🔐 Starting secure subscription process...');
       
-      const { clientSecret: secret, setupIntentId: intentId } = await startSubscription();
-      setClientSecret(secret);
-      setSetupIntentId(intentId);
+      // Use the new secure subscription flow
+      const result = await startSecureSubscription();
+      setClientSecret(result.clientSecret);
+      setSessionId(result.sessionId);
       setShowPaymentModal(true);
+      
+      console.log('✅ Secure subscription initialization successful');
     } catch (error) {
-      console.error('Subscription error:', error);
+      console.error('❌ Secure subscription initialization failed:', error);
       toast({
-        title: "Error",
-        description: "Failed to start subscription. Please try again.",
+        title: "Subscription Error",
+        description: error instanceof Error ? error.message : "Failed to start subscription. Please try again.",
         variant: "destructive",
       });
     } finally {
@@ -52,23 +61,53 @@ const SubscriptionModal: React.FC<SubscriptionModalProps> = ({
     }
   };
 
-  const handlePaymentSuccess = async () => {
+  const handlePaymentSuccess = async (setupIntentId: string) => {
+    console.log('🎉 Payment setup completed, starting secure verification...');
     setShowPaymentModal(false);
     
-    // Small delay to allow Stripe webhook to process
-    await new Promise(resolve => setTimeout(resolve, 1000));
-    
-    // Immediately refresh subscription status
-    await loadSubscriptionStatus();
-    
-    onSubscribe();
-    toast({
-      title: "Success!",
-      description: "Your free trial has started. Welcome to Creator tier!",
-    });
+    try {
+      // Show immediate success feedback
+      toast({
+        title: "Payment Successful!",
+        description: "Verifying your subscription...",
+      });
+      
+      // Close the main subscription modal immediately
+      onOpenChange(false);
+      
+      // Call the onSubscribe callback (this will trigger parent component actions)
+      onSubscribe();
+      
+      // Start secure verification process
+      const verificationSuccess = await verifySecureSubscription(sessionId);
+      
+      if (verificationSuccess) {
+        toast({
+          title: "Welcome to Creator!",
+          description: "Your free trial has started successfully!",
+        });
+      } else {
+        toast({
+          title: "Verification Pending",
+          description: "Your payment was successful. Subscription activation may take a few moments.",
+          variant: "default",
+        });
+      }
+      
+      console.log('✅ Secure subscription process completed');
+    } catch (error) {
+      console.error('❌ Secure verification failed:', error);
+      // Don't show error since payment was successful
+      toast({
+        title: "Subscription Active",
+        description: "Your subscription is being activated. Status will update automatically.",
+        variant: "default",
+      });
+    }
   };
 
   const handlePaymentError = (error: string) => {
+    console.error('❌ Payment error:', error);
     toast({
       title: "Payment Error",
       description: error,
@@ -302,7 +341,6 @@ const SubscriptionModal: React.FC<SubscriptionModalProps> = ({
         open={showPaymentModal}
         onOpenChange={setShowPaymentModal}
         clientSecret={clientSecret}
-        setupIntentId={setupIntentId}
         onSuccess={handlePaymentSuccess}
         onError={handlePaymentError}
       />

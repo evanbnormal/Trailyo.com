@@ -66,8 +66,18 @@ const Profile: React.FC = () => {
   const [showThumbnailDialog, setShowThumbnailDialog] = useState(false);
   const [selectedTrail, setSelectedTrail] = useState<Trail | null>(null);
   const navigate = useNavigate();
-  const { user, getUserTrails, saveUserTrail, deleteUserTrail } = useAuth();
-  const { subscriptionStatus, canCreateTrails, isLoading: subscriptionLoading } = useSubscription();
+  const { user, getUserTrails, saveUserTrail, deleteUserTrail, permanentlyDeleteTrail } = useAuth();
+  const { subscriptionStatus, canCreateTrails, isLoading: subscriptionLoading, clearSubscriptionCache } = useSubscription();
+  
+  // Debug logging for subscription status
+  console.log('🔍 Profile subscription status:', {
+    subscriptionStatus,
+    canCreateTrails: canCreateTrails(),
+    subscriptionLoading,
+    isSubscribed: subscriptionStatus?.isSubscribed,
+    isTrialing: subscriptionStatus?.isTrialing,
+    status: subscriptionStatus?.status
+  });
 
   // Subscription status loads automatically via useSubscription hook
   // Smart caching ensures fresh data while avoiding spam requests
@@ -82,10 +92,25 @@ const Profile: React.FC = () => {
 
       const { drafts, published } = await getUserTrails();
       
+      console.log('📄 Profile loadTrails debug:', {
+        userId: user.id,
+        draftsCount: drafts.length,
+        publishedCount: published.length,
+        drafts: drafts.map(d => ({ id: d.id, title: d.title, status: (d as any).status })),
+        published: published.map(p => ({ id: p.id, title: p.title, status: (p as any).status }))
+      });
+      
       // Combine and sort all trails by creation date
       const allTrails = [...drafts, ...published].sort((a, b) => 
         new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
       );
+      
+      console.log('📄 Combined trails:', allTrails.map(t => ({ 
+        id: t.id, 
+        title: t.title, 
+        status: (t as any).status,
+        is_published: (t as any).is_published 
+      })));
       
       setTrails(allTrails);
     };
@@ -212,14 +237,30 @@ const Profile: React.FC = () => {
     setShowDeleteDialog(true);
   };
 
-  const confirmDelete = () => {
+  const confirmDelete = async () => {
     if (trailToDelete) {
-      // Remove from appropriate storage
-      deleteUserTrail(trailToDelete.id, trailToDelete.status);
+      try {
+        console.log(`🗑️ Permanently deleting trail: ${trailToDelete.title} (${trailToDelete.id})`);
+        
+        // Permanently delete from both database and localStorage
+        await permanentlyDeleteTrail(trailToDelete.id);
 
-      // Update local state
-      setTrails(prev => prev.filter(trail => trail.id !== trailToDelete.id));
-      toast.success('Trail deleted');
+        // Update local state
+        setTrails(prev => prev.filter(trail => trail.id !== trailToDelete.id));
+        
+        // Force refresh trails from server to ensure consistency
+        setTimeout(async () => {
+          const { drafts, published } = await getUserTrails();
+          const allTrails = [...drafts, ...published].sort((a, b) => 
+            new Date((b as any).createdAt).getTime() - new Date((a as any).createdAt).getTime()
+          );
+          setTrails(allTrails as any);
+        }, 1000);
+        
+      } catch (error) {
+        console.error('Error deleting trail:', error);
+        toast.error('Failed to delete trail. Please try again.');
+      }
     }
     setShowDeleteDialog(false);
     setTrailToDelete(null);
@@ -227,6 +268,13 @@ const Profile: React.FC = () => {
 
   const handleEditTrail = (trail: Trail) => {
     // Save trail data to localStorage for CreatorView to load
+    console.log('📝 Saving trail to localStorage for editing:', {
+      id: trail.id,
+      title: trail.title,
+      hasSteps: !!trail.steps,
+      stepsCount: trail.steps?.length || 0,
+      steps: trail.steps
+    });
     localStorage.setItem('editingTrail', JSON.stringify(trail));
     navigate('/creator');
   };
@@ -293,20 +341,24 @@ const Profile: React.FC = () => {
   };
 
   const copyShareLink = async () => {
-    console.log('📋 Copy link clicked');
+    console.log('📋 Copy link clicked from sharing dialog');
     console.log('📋 Current trail:', currentTrail?.title);
     console.log('📋 Shareable link:', currentTrail?.shareableLink);
     
-    if (currentTrail?.shareableLink) {
+    if (currentTrail) {
+      // Generate shareableLink if missing
+      const linkToCopy = currentTrail.shareableLink || `${window.location.origin}/trail/${currentTrail.id}`;
+      console.log('📋 Link to copy:', linkToCopy);
+      
       try {
-        await navigator.clipboard.writeText(currentTrail.shareableLink);
+        await navigator.clipboard.writeText(linkToCopy);
         toast.success('Link copied to clipboard!');
         console.log('📋 Link copied successfully');
       } catch (error) {
         console.error('📋 Failed to copy to clipboard:', error);
         // Fallback: create a temporary input and copy
         const textArea = document.createElement('textarea');
-        textArea.value = currentTrail.shareableLink;
+        textArea.value = linkToCopy;
         document.body.appendChild(textArea);
         textArea.select();
         document.execCommand('copy');
@@ -315,8 +367,8 @@ const Profile: React.FC = () => {
         console.log('📋 Link copied using fallback method');
       }
     } else {
-      console.log('📋 No shareable link available');
-      toast.error('No shareable link available');
+      console.log('📋 No current trail available');
+      toast.error('No trail selected');
     }
   };
 
@@ -410,11 +462,31 @@ const Profile: React.FC = () => {
                 size="sm"
                 variant="ghost"
                 className="h-8 w-8 p-0 flex-shrink-0"
-                onClick={(e) => {
+                onClick={async (e) => {
                   e.stopPropagation();
-                  if (trail.shareableLink) {
-                    navigator.clipboard.writeText(trail.shareableLink);
+                  console.log('📋 Copy link clicked from trail card');
+                  console.log('📋 Trail:', trail.title);
+                  console.log('📋 Trail shareableLink:', trail.shareableLink);
+                  
+                  // Generate shareableLink if missing
+                  const linkToCopy = trail.shareableLink || `${window.location.origin}/trail/${trail.id}`;
+                  console.log('📋 Link to copy:', linkToCopy);
+                  
+                  try {
+                    await navigator.clipboard.writeText(linkToCopy);
                     toast.success('Link copied to clipboard!');
+                    console.log('📋 Link copied successfully');
+                  } catch (error) {
+                    console.error('📋 Failed to copy to clipboard:', error);
+                    // Fallback: create a temporary input and copy
+                    const textArea = document.createElement('textarea');
+                    textArea.value = linkToCopy;
+                    document.body.appendChild(textArea);
+                    textArea.select();
+                    document.execCommand('copy');
+                    document.body.removeChild(textArea);
+                    toast.success('Link copied to clipboard!');
+                    console.log('📋 Link copied using fallback method');
                   }
                 }}
               >
@@ -575,6 +647,70 @@ const Profile: React.FC = () => {
                 Create New Trail
               </Button>
             </Link>
+            {/* Simple Debug Button */}
+            <Button 
+              variant="outline" 
+              size="sm"
+              onClick={() => {
+                try {
+                  console.log('🔍 BUTTON CLICKED!');
+                  const userId = user?.id;
+                  console.log('🔍 User ID:', userId);
+                  
+                  if (!userId) {
+                    alert('No user found!');
+                    return;
+                  }
+                  
+                  // Get all localStorage data
+                  const drafts = localStorage.getItem(`user_${userId}_drafts`);
+                  const published = localStorage.getItem(`user_${userId}_published`);
+                  const saved = localStorage.getItem(`user_${userId}_saved`);
+                  const editing = localStorage.getItem('editingTrail');
+                  
+                  console.log('🔍 RAW LOCALSTORAGE DATA:', {
+                    drafts,
+                    published, 
+                    saved,
+                    editing
+                  });
+                  
+                  // Show alert with data
+                  const message = `
+LOCALSTORAGE DEBUG:
+- Drafts: ${drafts ? 'HAS DATA' : 'EMPTY'}
+- Published: ${published ? 'HAS DATA' : 'EMPTY'} 
+- Saved: ${saved ? 'HAS DATA' : 'EMPTY'}
+- Editing: ${editing ? 'HAS DATA' : 'EMPTY'}
+
+Check console for full details.
+                  `;
+                  
+                  alert(message);
+                  
+                  // Try to recover editing trail if it exists
+                  if (editing) {
+                    const editingTrail = JSON.parse(editing);
+                    if (confirm(`Found editing trail: "${editingTrail.title}". Move to drafts?`)) {
+                      const currentDrafts = JSON.parse(drafts || '[]');
+                      editingTrail.status = 'draft';
+                      currentDrafts.push(editingTrail);
+                      localStorage.setItem(`user_${userId}_drafts`, JSON.stringify(currentDrafts));
+                      localStorage.removeItem('editingTrail');
+                      alert('Recovered! Refreshing...');
+                      window.location.reload();
+                    }
+                  }
+                } catch (error) {
+                  console.error('🔍 DEBUG ERROR:', error);
+                  alert('Debug error: ' + error.message);
+                }
+              }}
+              className="ml-2"
+            >
+              🔍 Debug
+            </Button>
+            
             {/* Recovery function - run in console */}
                         <button 
               onClick={() => {
@@ -710,6 +846,24 @@ manualRecovery();
             >
               🆘 Manual Recovery
             </button>
+            
+            <button 
+              onClick={() => {
+                console.log('🔄 Clearing subscription cache and reloading...');
+                clearSubscriptionCache();
+                setTimeout(() => window.location.reload(), 500);
+              }}
+              style={{
+                padding: '8px 16px',
+                backgroundColor: '#dbeafe',
+                border: '1px solid #93c5fd',
+                borderRadius: '6px',
+                fontSize: '12px',
+                cursor: 'pointer'
+              }}
+            >
+              🔄 Fix Subscription Status
+            </button>
           </div>
         </div>
 
@@ -819,7 +973,7 @@ manualRecovery();
             <div className="flex items-center gap-2 p-3 bg-gray-50 rounded-lg">
               <input
                 type="text"
-                value={currentTrail?.shareableLink || ''}
+                value={currentTrail?.shareableLink || (currentTrail ? `${window.location.origin}/trail/${currentTrail.id}` : '')}
                 readOnly
                 className="flex-1 bg-transparent border-none outline-none text-sm"
               />
@@ -873,9 +1027,9 @@ manualRecovery();
       <Dialog open={showDeleteDialog} onOpenChange={setShowDeleteDialog}>
         <DialogContent className="mx-auto w-auto flex flex-col items-center justify-center text-center">
           <DialogHeader>
-            <DialogTitle>Delete Trail</DialogTitle>
+            <DialogTitle>Permanently Delete Trail</DialogTitle>
             <DialogDescription>
-              Are you sure you want to delete "{trailToDelete?.title}"? This action cannot be undone.
+              Are you sure you want to permanently delete "{trailToDelete?.title}"? This will completely remove the trail from your profile and database. This action cannot be undone.
             </DialogDescription>
           </DialogHeader>
           <div className="flex justify-end gap-3">
@@ -883,7 +1037,7 @@ manualRecovery();
               Cancel
             </Button>
             <Button variant="destructive" onClick={confirmDelete}>
-              Delete Trail
+              Permanently Delete
             </Button>
           </div>
         </DialogContent>

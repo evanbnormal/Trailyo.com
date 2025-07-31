@@ -1,23 +1,31 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
-  webpack: (config) => {
-    config.resolve.alias = {
-      ...config.resolve.alias,
-      '@': new URL('./src', import.meta.url).pathname,
-    };
-    return config;
+  reactStrictMode: true,
+  swcMinify: true,
+  
+  // Add CORS headers for API routes
+  async headers() {
+    return [
+      {
+        source: '/api/:path*',
+        headers: [
+          { key: 'Access-Control-Allow-Origin', value: '*' },
+          { key: 'Access-Control-Allow-Methods', value: 'GET, POST, PUT, DELETE, OPTIONS' },
+          { key: 'Access-Control-Allow-Headers', value: 'Content-Type, Authorization' },
+        ],
+      },
+    ];
   },
-  images: {
-    domains: ['images.unsplash.com', 'api.microlink.io'],
-  },
+
+  // Existing rewrite rules for React Router
   async rewrites() {
     return [
       {
-        source: '/trail/:path*',
+        source: '/((?!api|_next|static|favicon.ico).*)',
         destination: '/',
       },
     ];
   },
-}
+};
 
-export default nextConfig 
+export default nextConfig; 

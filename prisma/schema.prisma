@@ -1,9 +1,3 @@
-// This is your Prisma schema file,
-// learn more about it in the docs: https://pris.ly/d/prisma-schema
-
-// Looking for ways to speed up your queries, or scale easily with your serverless or edge functions?
-// Try Prisma Accelerate: https://pris.ly/cli/accelerate-init
-
 generator client {
   provider = "prisma-client-js"
 }
@@ -14,48 +8,55 @@ datasource db {
 }
 
 model User {
-  id          String   @id @default(uuid())
-  email       String   @unique
-  name        String
-  password    String
-  avatar      String?
-  confirmedAt DateTime?
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
-  trails      Trail[]
-  analytics   AnalyticsEvent[]
+  id           String           @id @default(uuid())
+  email        String           @unique
+  name         String
+  password     String
+  avatar       String?
+  confirmedAt  DateTime?
+  createdAt    DateTime         @default(now())
+  updatedAt    DateTime         @updatedAt
+  analytics    AnalyticsEvent[]
   subscription Subscription?
+  trails       Trail[]
 }
 
 model Trail {
-  id          String      @id @default(uuid())
-  title       String
-  description String
-  creator     User        @relation(fields: [creatorId], references: [id])
-  creatorId   String
-  steps       TrailStep[]
-  createdAt   DateTime    @default(now())
-  updatedAt   DateTime    @updatedAt
+  id                  String      @id @default(uuid())
+  title               String
+  description         String
+  creatorId           String
+  thumbnailUrl        String?
+  status              String      @default("draft")
+  trailValue          Float?
+  suggestedInvestment Float?
+  trailCurrency       String?     @default("USD")
+  createdAt           DateTime    @default(now())
+  updatedAt           DateTime    @updatedAt
+  creator             User        @relation(fields: [creatorId], references: [id])
+  steps               TrailStep[]
 }
 
 model TrailStep {
   id        String   @id @default(uuid())
-  trail     Trail    @relation(fields: [trailId], references: [id])
   trailId   String
   title     String
   content   String
   order     Int
+  type      String   @default("article")
+  source    String?
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+  trail     Trail    @relation(fields: [trailId], references: [id], onDelete: Cascade)
 }
 
 model AnalyticsEvent {
   id        String   @id @default(uuid())
-  user      User?    @relation(fields: [userId], references: [id])
   userId    String?
   event     String
   metadata  Json?
   createdAt DateTime @default(now())
+  user      User?    @relation(fields: [userId], references: [id])
 }
 
 model ResetToken {
@@ -67,16 +68,16 @@ model ResetToken {
 }
 
 model Subscription {
-  id                String   @id @default(uuid())
-  userId            String   @unique
-  user              User     @relation(fields: [userId], references: [id])
-  stripeCustomerId  String
+  id                   String    @id @default(uuid())
+  userId               String    @unique
+  stripeCustomerId     String
   stripeSubscriptionId String
-  status            String   // active, trialing, canceled, past_due, etc.
-  planType          String   @default("creator") // creator, etc.
-  trialEnd          DateTime?
-  currentPeriodEnd  DateTime?
-  canceledAt        DateTime?
-  createdAt         DateTime @default(now())
-  updatedAt         DateTime @updatedAt
+  status               String
+  planType             String    @default("creator")
+  trialEnd             DateTime?
+  currentPeriodEnd     DateTime?
+  canceledAt           DateTime?
+  createdAt            DateTime  @default(now())
+  updatedAt            DateTime  @updatedAt
+  user                 User      @relation(fields: [userId], references: [id])
 }

@@ -14,6 +14,7 @@ interface StripePaymentProps {
   creatorId: string;
   onSuccess: () => void;
   onCancel: () => void;
+  type?: 'tip' | 'skip_payment';
 }
 
 // Inner component that uses Stripe hooks
@@ -23,7 +24,8 @@ const PaymentForm: React.FC<{
   creatorId: string;
   onSuccess: () => void;
   onCancel: () => void;
-}> = ({ amount, trailId, creatorId, onSuccess, onCancel }) => {
+  type?: 'tip' | 'skip_payment';
+}> = ({ amount, trailId, creatorId, onSuccess, onCancel, type = 'skip_payment' }) => {
   const stripe = useStripe();
   const elements = useElements();
   const [isLoading, setIsLoading] = useState(false);
@@ -58,6 +60,7 @@ const PaymentForm: React.FC<{
           amount,
           trailId,
           creatorId,
+          type,
         }),
       });
 
@@ -74,7 +77,7 @@ const PaymentForm: React.FC<{
         elements,
         clientSecret,
         confirmParams: {
-          return_url: `${window.location.origin}/payment-success`,
+          return_url: `${typeof window !== 'undefined' ? window.location.origin : 'http://localhost:3000'}/payment-success`,
         },
         redirect: 'if_required',
       });
@@ -93,7 +96,9 @@ const PaymentForm: React.FC<{
       // Show success message
       toast({
         title: "Payment Successful!",
-        description: `You've paid $${amount} to skip this step.`,
+        description: type === 'tip' 
+          ? `You've tipped $${amount} to the creator!`
+          : `You've paid $${amount} to skip this step.`,
       });
       
       // Call success callback after a short delay to show the success state
@@ -188,6 +193,7 @@ export const StripePayment: React.FC<StripePaymentProps> = ({
   creatorId,
   onSuccess,
   onCancel,
+  type = 'skip_payment',
 }) => {
   const [clientSecret, setClientSecret] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -205,6 +211,7 @@ export const StripePayment: React.FC<StripePaymentProps> = ({
             amount,
             trailId,
             creatorId,
+            type,
           }),
         });
 
@@ -223,7 +230,7 @@ export const StripePayment: React.FC<StripePaymentProps> = ({
     };
 
     createPaymentIntent();
-  }, [amount, trailId, creatorId]);
+  }, [amount, trailId, creatorId, type]);
 
   if (isLoading) {
     return (
