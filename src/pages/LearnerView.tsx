@@ -119,6 +119,7 @@ const LearnerView: React.FC = () => {
   const [showStripePayment, setShowStripePayment] = useState(false);
   const [skipPaymentAmount, setSkipPaymentAmount] = useState(0);
   const [skipPaymentTarget, setSkipPaymentTarget] = useState<number | null>(null);
+  const [showLoginModal, setShowLoginModal] = useState(false);
   
   // Video tracking
   const [videoWatchTime, setVideoWatchTime] = useState<Record<number, number>>({});
@@ -725,6 +726,9 @@ const LearnerView: React.FC = () => {
       const filteredSaved = savedTrails.filter((t: any) => t.id !== trail.id);
       localStorage.setItem(`user_${user.id}_saved`, JSON.stringify([...filteredSaved, autoSavedTrail]));
       console.log('🔄 Auto-saved progress at step:', nextStepIndex);
+    } else {
+      // Show login modal for unauthenticated users
+      setShowLoginModal(true);
     }
 
     // Confetti for reward step
@@ -867,6 +871,14 @@ const LearnerView: React.FC = () => {
 
   const handleSkipStep = () => {
     if (skipToStep === null || !trail) return;
+
+    // Check if user is authenticated for skip functionality
+    if (!isAuthenticated) {
+      setShowLoginModal(true);
+      setShowSkipDialog(false);
+      setSkipToStep(null);
+      return;
+    }
 
     // Track step skip with cost
     const skipCost = getSkipCost(skipToStep);
@@ -1213,40 +1225,7 @@ const LearnerView: React.FC = () => {
           </div>
         </div>
 
-        {/* Authentication Notice for Public Access */}
-        {trail && !isAuthenticated && (
-          <div className="mx-6 md:mx-16 mb-6">
-            <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
-              <div className="flex items-start">
-                <div className="flex-shrink-0">
-                  <svg className="h-5 w-5 text-blue-400" viewBox="0 0 20 20" fill="currentColor">
-                    <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clipRule="evenodd" />
-                  </svg>
-                </div>
-                <div className="ml-3">
-                  <h3 className="text-sm font-medium text-blue-800">
-                    Sign in to save your progress
-                  </h3>
-                  <div className="mt-2 text-sm text-blue-700">
-                    <p>
-                      You can view and complete this trail without an account, but you'll need to sign in to save your progress and access it later.
-                    </p>
-                  </div>
-                  <div className="mt-3">
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => navigate('/')}
-                      className="text-blue-700 border-blue-300 hover:bg-blue-100"
-                    >
-                      Sign In / Create Account
-                    </Button>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-        )}
+
 
         {/* Dot-to-dot stepper above the card in focused view */}
         {!isOverviewMode && trail && (
@@ -1852,7 +1831,7 @@ const LearnerView: React.FC = () => {
           className="bg-black text-white hover:bg-black/90 px-6 py-2 text-base font-semibold shadow-lg active:scale-95 transition-transform"
           onClick={async () => {
             if (!isAuthenticated) {
-              toast({ title: 'Sign in required', description: 'Please sign in to save your progress.' });
+              setShowLoginModal(true);
               return;
             }
             if (!user) return;
@@ -1896,6 +1875,35 @@ const LearnerView: React.FC = () => {
         </Button>
       </div>
 
+      {/* Login Modal for Unauthenticated Users */}
+      <Dialog open={showLoginModal} onOpenChange={setShowLoginModal}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Sign in to continue</DialogTitle>
+            <DialogDescription>
+              You need to sign in to save your progress and access premium features like skipping steps.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="flex flex-col gap-4">
+            <Button 
+              onClick={() => {
+                setShowLoginModal(false);
+                navigate('/');
+              }}
+              className="w-full"
+            >
+              Sign In / Create Account
+            </Button>
+            <Button 
+              variant="outline"
+              onClick={() => setShowLoginModal(false)}
+              className="w-full"
+            >
+              Continue without saving
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
 
     </>
   );
