@@ -475,6 +475,10 @@ const LoginModal: React.FC<LoginModalProps> = ({ isOpen, onClose, onSuccess }) =
         onClose={() => setShowEmailConfirmation(false)}
         email={confirmationEmail}
         name={confirmationName}
+        onVerified={() => {
+          setShowEmailConfirmation(false);
+          onSuccess?.();
+        }}
       />
     </>
   );

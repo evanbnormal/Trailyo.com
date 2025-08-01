@@ -1888,10 +1888,42 @@ const LearnerView: React.FC = () => {
         onClose={() => setShowLoginModal(false)}
         onSuccess={() => {
           setShowLoginModal(false);
-          toast({
-            title: "Welcome back!",
-            description: "You can now save your progress and access premium features.",
-          });
+          
+          // Auto-save current progress when user successfully logs in
+          if (isAuthenticated && user && trail) {
+            const savedTrail = {
+              ...trail,
+              active: true,
+              currentStepIndex, // Save current step position
+              progressStepIndex, // Save furthest unlocked step
+              completedSteps: Array.from(completedSteps), // Save completed steps
+              videoWatchTime, // Save video watch progress
+              lastSavedAt: new Date().toISOString(),
+            };
+            
+            // Always save to saved trails when learning (regardless of whether user is creator)
+            const savedTrails = JSON.parse(localStorage.getItem(`user_${user.id}_saved`) || '[]');
+            const filteredSaved = savedTrails.filter((t: any) => t.id !== savedTrail.id);
+            localStorage.setItem(`user_${user.id}_saved`, JSON.stringify([...filteredSaved, savedTrail]));
+            
+            console.log('💾 Auto-saved progress after login:', {
+              trailId: savedTrail.id,
+              currentStep: currentStepIndex,
+              progressStep: progressStepIndex,
+              completedSteps: Array.from(completedSteps),
+              userId: user.id
+            });
+            
+            toast({
+              title: "Welcome back!",
+              description: "Your progress has been automatically saved. You can now access premium features and continue from where you left off.",
+            });
+          } else {
+            toast({
+              title: "Welcome back!",
+              description: "You can now save your progress and access premium features.",
+            });
+          }
         }}
       />
 

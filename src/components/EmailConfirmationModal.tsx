@@ -9,11 +9,13 @@ interface EmailConfirmationModalProps {
   onClose: () => void;
   email?: string;
   name?: string;
+  onVerified?: () => void;
 }
 
-const EmailConfirmationModal: React.FC<EmailConfirmationModalProps> = ({ isOpen, onClose, email, name }) => {
+const EmailConfirmationModal: React.FC<EmailConfirmationModalProps> = ({ isOpen, onClose, email, name, onVerified }) => {
   const [isResending, setIsResending] = useState(false);
   const [resent, setResent] = useState(false);
+  const [isCheckingVerification, setIsCheckingVerification] = useState(false);
 
   const handleResend = async () => {
     if (!email || !name) {
@@ -42,6 +44,36 @@ const EmailConfirmationModal: React.FC<EmailConfirmationModalProps> = ({ isOpen,
     }
   };
 
+  const handleOkayGotIt = async () => {
+    if (!email) {
+      onClose();
+      return;
+    }
+    
+    setIsCheckingVerification(true);
+    try {
+      // Try to log in to check if user is verified
+      const res = await fetch('/api/auth', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email, password: '' }), // We'll get a specific error for unverified users
+      });
+      
+      if (res.ok) {
+        // User is verified and can log in
+        onVerified?.();
+        onClose();
+      } else {
+        // User is not verified yet
+        toast.error('Please check your email and click the verification link before continuing.');
+      }
+    } catch (e) {
+      toast.error('Please check your email and click the verification link before continuing.');
+    } finally {
+      setIsCheckingVerification(false);
+    }
+  };
+
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
       <DialogContent className="sm:max-w-md text-center flex flex-col items-center justify-center py-10">
@@ -56,8 +88,13 @@ const EmailConfirmationModal: React.FC<EmailConfirmationModalProps> = ({ isOpen,
             )}
           </DialogDescription>
         </DialogHeader>
-        <Button className="mt-4 w-full max-w-xs" onClick={onClose} autoFocus>
-          Okay, got it!
+        <Button 
+          className="mt-4 w-full max-w-xs" 
+          onClick={handleOkayGotIt} 
+          disabled={isCheckingVerification}
+          autoFocus
+        >
+          {isCheckingVerification ? 'Checking...' : 'Okay, got it!'}
         </Button>
         <div className="mt-2">
           <button
