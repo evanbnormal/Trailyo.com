@@ -65,7 +65,14 @@ interface Trail {
   suggestedInvestment?: number;
   trailValue?: number;
   trailCurrency?: string;
-  creator?: string;
+  creator?: string | { id: string; name: string; email: string };
+}
+
+// Helper function to get creator name
+function getCreatorName(creator: string | { name: string } | undefined): string {
+  if (!creator) return 'Unknown Creator';
+  if (typeof creator === 'string') return creator;
+  return creator.name || 'Unknown Creator';
 }
 
 const LearnerView: React.FC = () => {
@@ -958,13 +965,13 @@ const LearnerView: React.FC = () => {
               <StripePayment
                 amount={tipAmount || trail?.suggestedInvestment || 25}
                 trailId={trail?.id || ''}
-                creatorId={trail?.creator || 'Unknown Creator'}
+                creatorId={getCreatorName(trail?.creator)}
                 type="tip"
                 onSuccess={() => {
                   console.log('🎁 Tip payment successful!');
                   toast({
                     title: "Thank you!",
-                    description: `You've successfully tipped $${tipAmount || trail?.suggestedInvestment || 25} to ${trail?.creator || 'the creator'}!`,
+                    description: `You've successfully tipped $${tipAmount || trail?.suggestedInvestment || 25} to ${getCreatorName(trail?.creator)}!`,
                   });
                   setTipCompleted(true);
                   setShowTipModal(false);
@@ -1028,8 +1035,8 @@ const LearnerView: React.FC = () => {
                         tipAmount,
                         finalTipAmount,
                         trailId: trail?.id,
-                        creatorId: trail?.creator || '',
-                        creatorName: trail?.creator
+                                              creatorId: getCreatorName(trail?.creator),
+                      creatorName: getCreatorName(trail?.creator)
                       });
                       setTipAmount(finalTipAmount);
                       
@@ -1098,7 +1105,7 @@ const LearnerView: React.FC = () => {
             <h1 className="text-4xl font-extrabold text-gray-900 truncate overflow-hidden whitespace-nowrap">{trail.title}</h1>
             <p className="text-gray-600">{trail.description}</p>
             <div className="flex items-center gap-2 mt-1">
-              <span className="text-gray-700 font-semibold">{trail.creator || 'Evan Brady'}</span>
+              <span className="text-gray-700 font-semibold">{getCreatorName(trail.creator)}</span>
               <span className="inline-flex items-center justify-center w-5 h-5">
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
                   <circle cx="12" cy="12" r="12" fill="#2196F3" />
@@ -1708,7 +1715,7 @@ const LearnerView: React.FC = () => {
             <StripePayment
               amount={skipPaymentAmount}
               trailId={trail?.id || 'skip-payment'}
-              creatorId={trail?.creator || 'unknown'}
+                              creatorId={getCreatorName(trail?.creator)}
               onSuccess={() => {
                 if (skipPaymentTarget !== null && trail) {
                   // Mark all steps up to (but NOT including) skipPaymentTarget as completed

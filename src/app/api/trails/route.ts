@@ -7,10 +7,13 @@ export async function GET(request: NextRequest) {
     const trailId = searchParams.get('trailId');
 
     if (trailId) {
-      // Get specific trail with steps
+      // Get specific trail with steps and creator info
       const trail = await db.trail.findUnique({
         where: { id: trailId },
-        include: { steps: { orderBy: { order: 'asc' } } },
+        include: { 
+          steps: { orderBy: { order: 'asc' } },
+          creator: { select: { id: true, name: true, email: true } }
+        },
       });
       if (!trail) {
         return NextResponse.json({ error: 'Trail not found' }, { status: 404 });
@@ -18,11 +21,14 @@ export async function GET(request: NextRequest) {
       return NextResponse.json(trail);
     }
 
-    // Return only published trails with steps
+    // Return only published trails with steps and creator info
     const publishedTrails = await db.trail.findMany({
       where: { status: 'published' }, // Only return published trails
       orderBy: { createdAt: 'desc' },
-      include: { steps: { orderBy: { order: 'asc' } } },
+      include: { 
+        steps: { orderBy: { order: 'asc' } },
+        creator: { select: { id: true, name: true, email: true } }
+      },
     });
     return NextResponse.json(publishedTrails);
   } catch (error) {

@@ -1,6 +1,13 @@
 import { Card } from '@/components/ui/card';
 import { Trash2, Gift, CheckCircle } from 'lucide-react';
 
+// Helper function to get creator name
+function getCreatorName(creator: string | { name: string } | undefined): string {
+  if (!creator) return 'Unknown Creator';
+  if (typeof creator === 'string') return creator;
+  return creator.name || 'Unknown Creator';
+}
+
 export const SavedTrailCard: React.FC<{ trail: any; onClick?: () => void; onDelete?: () => void }> = ({ trail, onClick, onDelete }) => {
   // Calculate progress percentage if available
   const totalSteps = trail?.steps?.length || 1;
@@ -27,9 +34,14 @@ export const SavedTrailCard: React.FC<{ trail: any; onClick?: () => void; onDele
           <div className="flex justify-between items-end mt-4 w-full">
             {/* Creator name with blue tick bottom left */}
             <div className="flex items-center gap-1">
-              <CheckCircle className="w-4 h-4 text-blue-500" />
+              <span className="inline-flex items-center justify-center w-4 h-4">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                  <circle cx="12" cy="12" r="12" fill="#2196F3" />
+                  <path d="M7 13l3 3 7-7" stroke="#fff" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"/>
+                </svg>
+              </span>
               <span className="text-sm text-gray-600 font-medium">
-                {trail.creatorName || trail.creator || 'Unknown Creator'}
+                {getCreatorName(trail.creator)}
               </span>
             </div>
             <div className="flex items-center gap-2">
