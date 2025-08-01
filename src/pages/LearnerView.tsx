@@ -39,6 +39,7 @@ const useWindowSize = () => {
 import { analyticsService } from '@/lib/analytics';
 import { StripePayment } from '@/components/StripePayment';
 import { TipPaymentModal } from '@/components/TipPaymentModal';
+import LoginModal from '@/components/LoginModal';
 
 interface TrailStep {
   id: string;
@@ -917,6 +918,11 @@ const LearnerView: React.FC = () => {
 
   const handleStepClick = (index: number) => {
     if (isStepLocked(index)) {
+      // Check if user is authenticated before showing skip dialog
+      if (!isAuthenticated) {
+        setShowLoginModal(true);
+        return;
+      }
       setSkipTargetStep(index);
       setShowSkipToStepDialog(true);
     } else {
@@ -1876,34 +1882,17 @@ const LearnerView: React.FC = () => {
       </div>
 
       {/* Login Modal for Unauthenticated Users */}
-      <Dialog open={showLoginModal} onOpenChange={setShowLoginModal}>
-        <DialogContent className="sm:max-w-md">
-          <DialogHeader>
-            <DialogTitle>Sign in to continue</DialogTitle>
-            <DialogDescription>
-              You need to sign in to save your progress and access premium features like skipping steps.
-            </DialogDescription>
-          </DialogHeader>
-          <div className="flex flex-col gap-4">
-            <Button 
-              onClick={() => {
-                setShowLoginModal(false);
-                navigate('/');
-              }}
-              className="w-full"
-            >
-              Sign In / Create Account
-            </Button>
-            <Button 
-              variant="outline"
-              onClick={() => setShowLoginModal(false)}
-              className="w-full"
-            >
-              Continue without saving
-            </Button>
-          </div>
-        </DialogContent>
-      </Dialog>
+      <LoginModal
+        isOpen={showLoginModal}
+        onClose={() => setShowLoginModal(false)}
+        onSuccess={() => {
+          setShowLoginModal(false);
+          toast({
+            title: "Welcome back!",
+            description: "You can now save your progress and access premium features.",
+          });
+        }}
+      />
 
     </>
   );
