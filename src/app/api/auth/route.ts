@@ -37,6 +37,16 @@ export async function POST(request: NextRequest) {
             if (!passwordMatch) {
               return NextResponse.json({ error: 'Invalid email or password' }, { status: 401 });
             }
+            
+            // Check if user's email is confirmed
+            if (!user.confirmedAt) {
+              console.log('User email not confirmed:', email);
+              return NextResponse.json({ 
+                status: 'unconfirmed_user',
+                name: user.name 
+              }, { status: 401 });
+            }
+            
             return NextResponse.json({ 
               success: true, 
               user: { 
@@ -73,6 +83,7 @@ export async function POST(request: NextRequest) {
         try {
           // Check if user already exists in Neon DB
           const existingUser = await db.user.findUnique({ where: { email } });
+          console.log('Checking for existing user:', email, 'Found:', !!existingUser);
           if (existingUser) {
             return NextResponse.json({ error: 'User already exists' }, { status: 400 });
           }
@@ -104,6 +115,8 @@ export async function POST(request: NextRequest) {
               `,
             });
             console.log('Email sent successfully to', email);
+            console.log('Email details - To:', email, 'From: noreply@trailyo.com', 'Subject: Confirm your email');
+            console.log('Confirmation URL:', confirmationUrl);
           } catch (e) {
             console.error('SendGrid error:', e);
             return NextResponse.json({ error: 'Failed to send confirmation email' }, { status: 500 });

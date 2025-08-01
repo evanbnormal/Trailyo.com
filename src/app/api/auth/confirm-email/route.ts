@@ -24,17 +24,39 @@ export async function GET(request: NextRequest) {
         }
 
         // Update user to mark as confirmed
-        await db.user.update({
+        const updatedUser = await db.user.update({
           where: { email },
           data: { confirmedAt: new Date() }
         });
 
         console.log('Email confirmed for:', email);
         
-        // Check if there's a stored trail URL for this user
-        // We'll redirect to homepage with trail info, and the frontend will handle the redirect
+        // Create a session for the user (similar to login)
+        // We'll store the user data in a way that the frontend can access
+        const userData = {
+          id: updatedUser.id,
+          email: updatedUser.email,
+          name: updatedUser.name,
+          confirmedAt: updatedUser.confirmedAt
+        };
+        
+        console.log('User data after confirmation:', userData);
+        
+        // Store user data in localStorage for auto-login
+        const userDataForStorage = {
+          id: userData.id,
+          email: userData.email,
+          name: userData.name,
+          avatar: undefined,
+          createdAt: new Date().toISOString(),
+          confirmedAt: userData.confirmedAt
+        };
+        
+        // Redirect to simple confirmation page with user data
         const baseUrl = process.env.BASE_URL || 'http://localhost:3000';
-        return NextResponse.redirect(new URL(`/?confirmed=true&email=${encodeURIComponent(email)}&fromTrail=true`, baseUrl));
+        const redirectUrl = new URL('/email-confirmed', baseUrl);
+        redirectUrl.searchParams.set('userData', JSON.stringify(userDataForStorage));
+        return NextResponse.redirect(redirectUrl);
         
       } catch (dbError) {
         console.error('Database error during confirmation:', dbError);

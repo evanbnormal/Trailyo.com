@@ -32,10 +32,30 @@ const Home: React.FC = () => {
       if (searchParams.get('confirmed') === 'true') {
         const email = searchParams.get('email');
         const fromTrail = searchParams.get('fromTrail') === 'true';
+        const userId = searchParams.get('userId');
+        const userName = searchParams.get('userName');
+        
+        // Auto-login the user after email confirmation
+        if (email && userId && userName) {
+          const userData = {
+            id: userId,
+            email: email,
+            name: userName,
+            avatar: undefined,
+            createdAt: new Date().toISOString(),
+          };
+          
+          // Store user data in localStorage to simulate login
+          localStorage.setItem('currentUser', JSON.stringify(userData));
+          console.log('Auto-logged in user after email confirmation:', userData);
+        }
         
         // Check if user signed up from a trail and redirect them back
         if (email && fromTrail) {
           const storedTrailUrl = localStorage.getItem(`pending_confirmation_${email}`);
+          console.log('Looking for stored trail URL for email:', email);
+          console.log('Found stored trail URL:', storedTrailUrl);
+          
           if (storedTrailUrl) {
             // Clean up the stored URL
             localStorage.removeItem(`pending_confirmation_${email}`);
@@ -45,8 +65,17 @@ const Home: React.FC = () => {
             
             // Redirect back to trail after a short delay
             setTimeout(() => {
-              navigate(storedTrailUrl.replace(window.location.origin, ''));
+              const redirectPath = storedTrailUrl.replace(window.location.origin, '');
+              console.log('Redirecting to:', redirectPath);
+              navigate(redirectPath);
             }, 2000);
+          } else {
+            console.log('No stored trail URL found for email:', email);
+            // Still show success message even if no trail URL found
+            setShowConfirmationMessage(true);
+            setTimeout(() => {
+              setShowConfirmationMessage(false);
+            }, 3000);
           }
         }
         
@@ -56,6 +85,8 @@ const Home: React.FC = () => {
         url.searchParams.delete('email');
         url.searchParams.delete('fromTrail');
         url.searchParams.delete('autoLogin');
+        url.searchParams.delete('userId');
+        url.searchParams.delete('userName');
         window.history.replaceState({}, '', url.pathname + url.search);
       }
     }

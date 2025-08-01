@@ -61,7 +61,7 @@ const LoginModal: React.FC<LoginModalProps> = ({ isOpen, onClose, onSuccess }) =
         setConfirmationEmail(loginEmail);
         setConfirmationName(result.name || '');
         setShowEmailConfirmation(true);
-        onClose();
+        // Don't close the modal, just clear the form
         setLoginEmail('');
         setLoginPassword('');
       }
@@ -91,8 +91,12 @@ const LoginModal: React.FC<LoginModalProps> = ({ isOpen, onClose, onSuccess }) =
     try {
       // Store current trail URL for redirect after confirmation
       const currentUrl = window.location.href;
+      console.log('Current URL during signup:', currentUrl);
       if (currentUrl.includes('/trail/')) {
         localStorage.setItem(`pending_confirmation_${signupEmail}`, currentUrl);
+        console.log('Stored trail URL for email:', signupEmail, 'URL:', currentUrl);
+      } else {
+        console.log('Not on a trail page, not storing URL');
       }
 
       const result = await signup(signupEmail, signupPassword, signupName);

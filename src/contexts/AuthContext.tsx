@@ -18,6 +18,7 @@ interface AuthContextType {
   signup: (email: string, password: string, name: string) => Promise<boolean | 'unconfirmed_user'>;
   logout: (redirectCallback?: () => void) => void;
   resetPassword: (email: string, newPassword: string) => Promise<boolean>;
+  refreshSession: () => void;
   getUserTrails: () => Promise<{ drafts: Trail[]; published: Trail[] }>;
   saveUserTrail: (trail: Trail, type: 'draft' | 'published') => Promise<void>;
   deleteUserTrail: (trailId: string, type: 'draft' | 'published') => Promise<void>;
@@ -171,12 +172,17 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       const data = await response.json();
 
       if (!response.ok) {
+        // Check if this is an unconfirmed user response
+        if (data.status === 'unconfirmed_user') {
+          return { status: 'unconfirmed_user', name: data.name };
+        }
+        // For other errors, show the error message
         toast.error(data.error || 'Login failed');
         return false;
       }
 
       if (data.status === 'unconfirmed_user') {
-        toast.info('Confirmation email resent. Please check your inbox.');
+        // Don't show toast here - let the LoginModal handle the UI
         return { status: 'unconfirmed_user', name: data.name };
       }
 
@@ -272,6 +278,25 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       console.error('Reset password error:', error);
       toast.error('Password reset failed. Please try again.');
       return false;
+    }
+  };
+
+  const refreshSession = () => {
+    const savedUser = localStorage.getItem('currentUser');
+    if (savedUser) {
+      try {
+        const userData = JSON.parse(savedUser);
+        setUser(userData);
+        setIsAuthenticated(true);
+        console.log('Session refreshed with user:', userData);
+      } catch (error) {
+        console.error('Error parsing saved user during refresh:', error);
+        localStorage.removeItem('currentUser');
+      }
+    } else {
+      setUser(null);
+      setIsAuthenticated(false);
+      console.log('No saved user found during refresh');
     }
   };
 
@@ -619,6 +644,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     signup,
     logout,
     resetPassword,
+    refreshSession,
     getUserTrails,
     saveUserTrail,
     deleteUserTrail,

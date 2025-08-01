@@ -3,6 +3,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } f
 import { Button } from '@/components/ui/button';
 import { CheckCircle } from 'lucide-react';
 import { toast } from 'sonner';
+import { useAuth } from '@/contexts/AuthContext';
 
 interface EmailConfirmationModalProps {
   isOpen: boolean;
@@ -16,6 +17,7 @@ const EmailConfirmationModal: React.FC<EmailConfirmationModalProps> = ({ isOpen,
   const [isResending, setIsResending] = useState(false);
   const [resent, setResent] = useState(false);
   const [isCheckingVerification, setIsCheckingVerification] = useState(false);
+  const { refreshSession } = useAuth();
 
   const handleResend = async () => {
     if (!email || !name) {
@@ -52,22 +54,39 @@ const EmailConfirmationModal: React.FC<EmailConfirmationModalProps> = ({ isOpen,
     
     setIsCheckingVerification(true);
     try {
-      // Try to log in to check if user is verified
-      const res = await fetch('/api/auth', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email, password: '' }), // We'll get a specific error for unverified users
-      });
+      // Check if user data exists in localStorage (meaning they confirmed their email)
+      const storedUserData = localStorage.getItem('currentUser');
+      console.log('Checking localStorage for user data:', storedUserData);
+      console.log('Looking for email:', email);
       
-      if (res.ok) {
-        // User is verified and can log in
-        onVerified?.();
-        onClose();
+      if (storedUserData) {
+        try {
+          const userData = JSON.parse(storedUserData);
+          console.log('Parsed user data:', userData);
+          console.log('Comparing emails:', userData.email, '===', email);
+          
+          if (userData.email === email) {
+            // User is confirmed and signed in
+            console.log('Email match found! User is confirmed.');
+            refreshSession(); // Refresh the authentication context
+            toast.success('Welcome! You are now signed in.');
+            onVerified?.();
+            onClose();
+            return;
+          } else {
+            console.log('Email mismatch. Stored:', userData.email, 'Looking for:', email);
+          }
+        } catch (error) {
+          console.error('Error parsing stored user data:', error);
+        }
       } else {
-        // User is not verified yet
-        toast.error('Please check your email and click the verification link before continuing.');
+        console.log('No user data found in localStorage');
       }
+      
+      // User is not confirmed yet
+      toast.error('Please check your email and click the verification link before continuing.');
     } catch (e) {
+      console.error('Error in handleOkayGotIt:', e);
       toast.error('Please check your email and click the verification link before continuing.');
     } finally {
       setIsCheckingVerification(false);

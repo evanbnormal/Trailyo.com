@@ -21,6 +21,7 @@ export async function POST(request: NextRequest) {
       const baseUrl = process.env.BASE_URL || 'http://localhost:3000';
       const confirmationUrl = `${baseUrl}/api/auth/confirm-email?email=${encodeURIComponent(email)}`;
       console.log('Sending confirmation email to:', email);
+      console.log('Confirmation URL:', confirmationUrl);
       
       await sgMail.send({
         to: email,
@@ -44,6 +45,7 @@ export async function POST(request: NextRequest) {
         `,
       });
       console.log('Confirmation email sent successfully to:', email);
+      console.log('Email details - To:', email, 'From: noreply@trailyo.com', 'Subject: Confirm your email');
       return NextResponse.json({ success: true });
     } catch (e) {
       console.error('SendGrid error:', e);
