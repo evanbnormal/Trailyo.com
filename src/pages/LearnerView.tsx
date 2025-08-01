@@ -66,6 +66,8 @@ interface Trail {
   trailValue?: number;
   trailCurrency?: string;
   creator?: string | { id: string; name: string; email: string };
+  creatorId?: string;
+  creator_id?: string;
 }
 
 // Helper function to get creator name
@@ -191,124 +193,169 @@ const LearnerView: React.FC = () => {
 
       console.log('Loading trail with ID:', actualTrailId);
 
-      // First try to find the trail in current user's trails
-      const userTrails = await getUserTrails();
-      const { drafts, published } = userTrails;
-      const allUserTrails = [...drafts, ...published];
-      console.log('User trails:', allUserTrails.map(t => ({ id: t.id, title: t.title })));
-      
-      const foundTrail = allUserTrails.find(t => t.id === actualTrailId);
-      
-      // If not found in user's trails, search through saved trails and all users  
-      if (!foundTrail) {
-        console.log('Trail not found in user trails, searching saved trails and all users...');
-        
-        // First check current user's saved trails (from learner view)
-        if (user) {
-          const savedTrails = JSON.parse(localStorage.getItem(`user_${user.id}_saved`) || '[]');
-          console.log('Current user saved trails:', savedTrails.map(t => ({ id: t.id, title: t.title })));
-          const savedTrail = savedTrails.find(t => t.id === actualTrailId);
-          if (savedTrail) {
-            console.log('Found trail in current user saved trails');
-            if (isMounted) {
-              // Ensure creator information is available for tip functionality
-              const trailWithCreator = {
-                ...savedTrail,
-                creatorId: savedTrail.creatorId || savedTrail.creator_id || user?.id,
-                creator_id: savedTrail.creator_id || savedTrail.creatorId || user?.id,
-                creator: savedTrail.creator || 'Unknown Creator'
-              };
-              setTrail(trailWithCreator);
-              setTrailLoaded(true);
-              
-              // Load saved progress
-              if (savedTrail.currentStepIndex !== undefined) {
-                setCurrentStepIndex(savedTrail.currentStepIndex);
+      // First try to load from public API (works for anyone)
+      try {
+        const response = await fetch(`/api/trails/public?trailId=${actualTrailId}`);
+        if (response.ok) {
+          const publicTrail = await response.json();
+          console.log('Found trail via public API:', publicTrail.title);
+          
+          if (isMounted) {
+            setTrail(publicTrail);
+            setTrailLoaded(true);
+            
+            // Track trail view
+            analyticsService.trackTrailView(actualTrailId, publicTrail.title);
+            
+            // If user is authenticated, try to load their saved progress
+            if (isAuthenticated && user) {
+              const savedTrails = JSON.parse(localStorage.getItem(`user_${user.id}_saved`) || '[]');
+              const savedTrail = savedTrails.find(t => t.id === actualTrailId);
+              if (savedTrail) {
+                console.log('Loading saved progress for authenticated user');
+                if (savedTrail.currentStepIndex !== undefined) {
+                  setCurrentStepIndex(savedTrail.currentStepIndex);
+                }
+                if (savedTrail.progressStepIndex !== undefined) {
+                  setProgressStepIndex(savedTrail.progressStepIndex);
+                }
+                if (savedTrail.completedSteps) {
+                  setCompletedSteps(new Set(savedTrail.completedSteps));
+                }
+                if (savedTrail.videoWatchTime) {
+                  setVideoWatchTime(savedTrail.videoWatchTime);
+                }
               }
-              if (savedTrail.progressStepIndex !== undefined) {
-                setProgressStepIndex(savedTrail.progressStepIndex);
-              }
-              if (savedTrail.completedSteps) {
-                setCompletedSteps(new Set(savedTrail.completedSteps));
-              }
-              if (savedTrail.videoWatchTime) {
-                setVideoWatchTime(savedTrail.videoWatchTime);
-              }
-              
-              // Track trail view
-              analyticsService.trackTrailView(actualTrailId, savedTrail.title);
             }
-            return; // Exit early if found
+          }
+          return; // Exit early if found via public API
+        }
+      } catch (error) {
+        console.log('Public API failed, falling back to local storage search:', error);
+      }
+
+      // Fallback: try to find the trail in current user's trails (for authenticated users)
+      if (isAuthenticated) {
+        const userTrails = await getUserTrails();
+        const { drafts, published } = userTrails;
+        const allUserTrails = [...drafts, ...published];
+        console.log('User trails:', allUserTrails.map(t => ({ id: t.id, title: t.title })));
+        
+        const foundTrail = allUserTrails.find(t => t.id === actualTrailId);
+        
+        // If not found in user's trails, search through saved trails and all users  
+        if (!foundTrail) {
+          console.log('Trail not found in user trails, searching saved trails and all users...');
+          
+          // First check current user's saved trails (from learner view)
+          if (user) {
+            const savedTrails = JSON.parse(localStorage.getItem(`user_${user.id}_saved`) || '[]');
+            console.log('Current user saved trails:', savedTrails.map(t => ({ id: t.id, title: t.title })));
+            const savedTrail = savedTrails.find(t => t.id === actualTrailId);
+            if (savedTrail) {
+              console.log('Found trail in current user saved trails');
+              if (isMounted) {
+                // Ensure creator information is available for tip functionality
+                const trailWithCreator = {
+                  ...savedTrail,
+                  creatorId: savedTrail.creatorId || savedTrail.creator_id || user?.id,
+                  creator_id: savedTrail.creator_id || savedTrail.creatorId || user?.id,
+                  creator: savedTrail.creator || 'Unknown Creator'
+                };
+                setTrail(trailWithCreator);
+                setTrailLoaded(true);
+                
+                // Load saved progress
+                if (savedTrail.currentStepIndex !== undefined) {
+                  setCurrentStepIndex(savedTrail.currentStepIndex);
+                }
+                if (savedTrail.progressStepIndex !== undefined) {
+                  setProgressStepIndex(savedTrail.progressStepIndex);
+                }
+                if (savedTrail.completedSteps) {
+                  setCompletedSteps(new Set(savedTrail.completedSteps));
+                }
+                if (savedTrail.videoWatchTime) {
+                  setVideoWatchTime(savedTrail.videoWatchTime);
+                }
+                
+                // Track trail view
+                analyticsService.trackTrailView(actualTrailId, savedTrail.title);
+              }
+              return; // Exit early if found
+            }
+          }
+          
+          // Then search through all users' published trails
+          const allUsers = JSON.parse(localStorage.getItem('users') || '[]');
+          console.log('All users:', allUsers);
+          
+          for (const user of allUsers) {
+            const userPublished = JSON.parse(localStorage.getItem(`user_${user.id}_published`) || '[]');
+            console.log(`User ${user.id} published trails:`, userPublished.map(t => ({ id: t.id, title: t.title })));
+            const foundTrail = userPublished.find(t => t.id === actualTrailId);
+            if (foundTrail) {
+              console.log('Found trail in user:', user.id);
+              if (isMounted) {
+                // Ensure creator information is available for tip functionality
+                const trailWithCreator = {
+                  ...foundTrail,
+                  creatorId: foundTrail.creatorId || foundTrail.creator_id || user.id,
+                  creator_id: foundTrail.creator_id || foundTrail.creatorId || user.id,
+                  creator: foundTrail.creator || 'Unknown Creator'
+                };
+                setTrail(trailWithCreator);
+                setTrailLoaded(true);
+                analyticsService.trackTrailView(actualTrailId, foundTrail.title);
+              }
+              return; // Exit early if found
+            }
           }
         }
         
-        // Then search through all users' published trails
-        const allUsers = JSON.parse(localStorage.getItem('users') || '[]');
-        console.log('All users:', allUsers);
-        
-        for (const user of allUsers) {
-          const userPublished = JSON.parse(localStorage.getItem(`user_${user.id}_published`) || '[]');
-          console.log(`User ${user.id} published trails:`, userPublished.map(t => ({ id: t.id, title: t.title })));
-          const foundTrail = userPublished.find(t => t.id === actualTrailId);
-          if (foundTrail) {
-            console.log('Found trail in user:', user.id);
-            if (isMounted) {
-              // Ensure creator information is available for tip functionality
-              const trailWithCreator = {
-                ...foundTrail,
-                creatorId: foundTrail.creatorId || foundTrail.creator_id || user.id,
-                creator_id: foundTrail.creator_id || foundTrail.creatorId || user.id,
-                creator: foundTrail.creator || 'Unknown Creator'
-              };
-              setTrail(trailWithCreator);
-              setTrailLoaded(true);
-              analyticsService.trackTrailView(actualTrailId, foundTrail.title);
+        if (foundTrail && isMounted) {
+          console.log('Setting trail:', foundTrail.title);
+          // Ensure creator information is available for tip functionality
+          const trailWithCreator = {
+            ...foundTrail,
+            creatorId: foundTrail.creatorId || foundTrail.creator_id || user?.id,
+            creator_id: foundTrail.creator_id || foundTrail.creatorId || user?.id,
+            creator: foundTrail.creator || 'Unknown Creator'
+          } as any;
+          setTrail(trailWithCreator);
+          setTrailLoaded(true);
+          
+          // Load saved progress if available
+          if (user) {
+            const savedTrails = JSON.parse(localStorage.getItem(`user_${user.id}_saved`) || '[]');
+            const savedProgress = savedTrails.find((t: any) => t.id === actualTrailId);
+            
+            if (savedProgress) {
+              console.log('Loading saved progress:', savedProgress);
+              // Restore progress state
+              if (savedProgress.currentStepIndex !== undefined) {
+                setCurrentStepIndex(savedProgress.currentStepIndex);
+              }
+              if (savedProgress.progressStepIndex !== undefined) {
+                setProgressStepIndex(savedProgress.progressStepIndex);
+              }
+              if (savedProgress.completedSteps) {
+                setCompletedSteps(new Set(savedProgress.completedSteps));
+              }
+              if (savedProgress.videoWatchTime) {
+                setVideoWatchTime(savedProgress.videoWatchTime);
+              }
             }
-            return; // Exit early if found
           }
+          
+          // Track trail view
+          analyticsService.trackTrailView(actualTrailId, foundTrail.title);
         }
       }
       
-      if (foundTrail && isMounted) {
-        console.log('Setting trail:', foundTrail.title);
-        // Ensure creator information is available for tip functionality
-        const trailWithCreator = {
-          ...foundTrail,
-          creatorId: foundTrail.creatorId || foundTrail.creator_id || user?.id,
-          creator_id: foundTrail.creator_id || foundTrail.creatorId || user?.id,
-          creator: foundTrail.creator || 'Unknown Creator'
-        };
-        setTrail(trailWithCreator);
-        setTrailLoaded(true);
-        
-        // Load saved progress if available
-        if (user) {
-          const savedTrails = JSON.parse(localStorage.getItem(`user_${user.id}_saved`) || '[]');
-          const savedProgress = savedTrails.find((t: any) => t.id === actualTrailId);
-          
-          if (savedProgress) {
-            console.log('Loading saved progress:', savedProgress);
-            // Restore progress state
-            if (savedProgress.currentStepIndex !== undefined) {
-              setCurrentStepIndex(savedProgress.currentStepIndex);
-            }
-            if (savedProgress.progressStepIndex !== undefined) {
-              setProgressStepIndex(savedProgress.progressStepIndex);
-            }
-            if (savedProgress.completedSteps) {
-              setCompletedSteps(new Set(savedProgress.completedSteps));
-            }
-            if (savedProgress.videoWatchTime) {
-              setVideoWatchTime(savedProgress.videoWatchTime);
-            }
-          }
-        }
-        
-        // Track trail view
-        analyticsService.trackTrailView(actualTrailId, foundTrail.title);
-      } else if (isMounted) {
+      // If we get here, trail was not found
+      if (isMounted) {
         console.log('Trail not found anywhere, showing error');
-        // Trail not found, show error instead of redirecting
         setTrail(null);
         setTrailLoaded(true);
       }
@@ -1165,6 +1212,41 @@ const LearnerView: React.FC = () => {
             </div>
           </div>
         </div>
+
+        {/* Authentication Notice for Public Access */}
+        {trail && !isAuthenticated && (
+          <div className="mx-6 md:mx-16 mb-6">
+            <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+              <div className="flex items-start">
+                <div className="flex-shrink-0">
+                  <svg className="h-5 w-5 text-blue-400" viewBox="0 0 20 20" fill="currentColor">
+                    <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clipRule="evenodd" />
+                  </svg>
+                </div>
+                <div className="ml-3">
+                  <h3 className="text-sm font-medium text-blue-800">
+                    Sign in to save your progress
+                  </h3>
+                  <div className="mt-2 text-sm text-blue-700">
+                    <p>
+                      You can view and complete this trail without an account, but you'll need to sign in to save your progress and access it later.
+                    </p>
+                  </div>
+                  <div className="mt-3">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => navigate('/')}
+                      className="text-blue-700 border-blue-300 hover:bg-blue-100"
+                    >
+                      Sign In / Create Account
+                    </Button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* Dot-to-dot stepper above the card in focused view */}
         {!isOverviewMode && trail && (
