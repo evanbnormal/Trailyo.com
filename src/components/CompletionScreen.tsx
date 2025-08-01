@@ -29,15 +29,15 @@ const CompletionScreen: React.FC<CompletionScreenProps> = ({
   };
   
   const handleTip = () => {
-    setShowThanks(true);
-    toast.success(`Thank you for tipping $${tipAmount} to ${trail.creator}!`);
-    setTimeout(() => {
-      onRestart();
-    }, 3000);
+    console.log('🎁 Tip button clicked in CompletionScreen!');
+    // This will be handled by the parent component
   };
   
   return (
-    <div className="w-full max-w-3xl mx-auto px-4 py-12 animate-fade-in">
+    <>
+
+
+      <div className="w-full max-w-3xl mx-auto px-4 py-12 animate-fade-in">
       <Card className="border border-gray-100 shadow-md bg-white text-center">
         <CardHeader className="pb-2">
           <div className="flex justify-center mb-4">
@@ -134,6 +134,7 @@ const CompletionScreen: React.FC<CompletionScreenProps> = ({
         </CardContent>
       </Card>
     </div>
+    </>
   );
 };
 

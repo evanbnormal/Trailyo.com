@@ -97,6 +97,15 @@ const LearnerView: React.FC = () => {
   const [trailLoaded, setTrailLoaded] = useState(false);
   const [tipAmount, setTipAmount] = useState(25); // Move tipAmount state to top level
   const [showTipModal, setShowTipModal] = useState(false);
+  const showTipModalRef = useRef(false); // Use ref to track state
+  
+  // Debug: Log when showTipModal changes
+  useEffect(() => {
+    console.log('🎁 showTipModal changed to:', showTipModal);
+  }, [showTipModal]);
+
+  // Debug: Log component render
+  console.log('🎁 LearnerView rendering with showTipModal:', showTipModal);
   const [tipCompleted, setTipCompleted] = useState(false); // Track if user has tipped or skipped
   const [showStripePayment, setShowStripePayment] = useState(false);
   const [skipPaymentAmount, setSkipPaymentAmount] = useState(0);
@@ -195,7 +204,14 @@ const LearnerView: React.FC = () => {
           if (savedTrail) {
             console.log('Found trail in current user saved trails');
             if (isMounted) {
-              setTrail(savedTrail);
+              // Ensure creator information is available for tip functionality
+              const trailWithCreator = {
+                ...savedTrail,
+                creatorId: savedTrail.creatorId || savedTrail.creator_id || user?.id,
+                creator_id: savedTrail.creator_id || savedTrail.creatorId || user?.id,
+                creator: savedTrail.creator || 'Unknown Creator'
+              };
+              setTrail(trailWithCreator);
               setTrailLoaded(true);
               
               // Load saved progress
@@ -230,7 +246,14 @@ const LearnerView: React.FC = () => {
           if (foundTrail) {
             console.log('Found trail in user:', user.id);
             if (isMounted) {
-              setTrail(foundTrail);
+              // Ensure creator information is available for tip functionality
+              const trailWithCreator = {
+                ...foundTrail,
+                creatorId: foundTrail.creatorId || foundTrail.creator_id || user.id,
+                creator_id: foundTrail.creator_id || foundTrail.creatorId || user.id,
+                creator: foundTrail.creator || 'Unknown Creator'
+              };
+              setTrail(trailWithCreator);
               setTrailLoaded(true);
               analyticsService.trackTrailView(actualTrailId, foundTrail.title);
             }
@@ -241,7 +264,14 @@ const LearnerView: React.FC = () => {
       
       if (foundTrail && isMounted) {
         console.log('Setting trail:', foundTrail.title);
-        setTrail(foundTrail);
+        // Ensure creator information is available for tip functionality
+        const trailWithCreator = {
+          ...foundTrail,
+          creatorId: foundTrail.creatorId || foundTrail.creator_id || user?.id,
+          creator_id: foundTrail.creator_id || foundTrail.creatorId || user?.id,
+          creator: foundTrail.creator || 'Unknown Creator'
+        };
+        setTrail(trailWithCreator);
         setTrailLoaded(true);
         
         // Load saved progress if available
@@ -636,7 +666,7 @@ const LearnerView: React.FC = () => {
         lastSavedAt: new Date().toISOString(),
       };
       
-      // Save to localStorage
+      // Always save to saved trails when learning (regardless of whether user is creator)
       const savedTrails = JSON.parse(localStorage.getItem(`user_${user.id}_saved`) || '[]');
       const filteredSaved = savedTrails.filter((t: any) => t.id !== trail.id);
       localStorage.setItem(`user_${user.id}_saved`, JSON.stringify([...filteredSaved, autoSavedTrail]));
@@ -895,79 +925,152 @@ const LearnerView: React.FC = () => {
     }
     
     return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-        <div className="text-center max-w-2xl mx-auto p-6">
-          <div className="mb-8">
-            <div className="w-24 h-24 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-6">
-              <Check className="h-12 w-12 text-green-600" />
+      <>
+        {/* Tip Modal - Stripe Payment */}
+        {console.log('🎁 About to render modal, showTipModal:', showTipModal, 'ref:', showTipModalRef.current)}
+        {(showTipModal || showTipModalRef.current) && (
+          <div style={{
+            position: 'fixed',
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            background: 'rgba(0, 0, 0, 0.5)',
+            zIndex: 99999,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center'
+          }}>
+            <div style={{
+              background: 'white',
+              padding: '30px',
+              borderRadius: '12px',
+              maxWidth: '500px',
+              width: '90%',
+              maxHeight: '90vh',
+              overflowY: 'auto',
+              textAlign: 'center',
+              boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04)'
+            }}>
+              <h2 style={{ fontSize: '24px', marginBottom: '15px', fontWeight: 'bold', color: '#1f2937' }}>Support the Creator</h2>
+              <p style={{ marginBottom: '20px', fontSize: '16px', color: '#6b7280' }}>Amount: <strong>${tipAmount || trail?.suggestedInvestment || 25}</strong></p>
+              
+              <StripePayment
+                amount={tipAmount || trail?.suggestedInvestment || 25}
+                trailId={trail?.id || ''}
+                creatorId={trail?.creator || 'Unknown Creator'}
+                type="tip"
+                onSuccess={() => {
+                  console.log('🎁 Tip payment successful!');
+                  toast({
+                    title: "Thank you!",
+                    description: `You've successfully tipped $${tipAmount || trail?.suggestedInvestment || 25} to ${trail?.creator || 'the creator'}!`,
+                  });
+                  setTipCompleted(true);
+                  setShowTipModal(false);
+                  showTipModalRef.current = false;
+                }}
+                onCancel={() => {
+                  setShowTipModal(false);
+                  showTipModalRef.current = false;
+                }}
+              />
             </div>
-            <h1 className="text-4xl font-bold text-gray-900 mb-4">Trail Completed!</h1>
-            <p className="text-xl text-gray-600 mb-8">Congratulations! You've successfully completed "{trail.title}".</p>
           </div>
+        )}
 
-          {/* Tip CTA - Front and Centre */}
-          <div className="bg-white rounded-xl shadow-lg border border-gray-200 p-8 mb-8">
-            <div className="flex items-center justify-center mb-4">
-              <div className="w-16 h-16 bg-gradient-to-br from-yellow-400 to-amber-500 rounded-full flex items-center justify-center mr-4">
-                <Gift className="h-8 w-8 text-white" />
+        <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+          <div className="text-center max-w-2xl mx-auto p-6">
+            <div className="mb-8">
+              <div className="w-24 h-24 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-6">
+                <Check className="h-12 w-12 text-green-600" />
               </div>
-              <div className="text-left">
-                <h2 className="text-2xl font-bold text-gray-900">Support the Creator</h2>
-              </div>
+              <h1 className="text-4xl font-bold text-gray-900 mb-4">Trail Completed!</h1>
+              <p className="text-xl text-gray-600 mb-8">Congratulations! You've successfully completed "{trail.title}".</p>
             </div>
 
-            <div className="text-center mb-6">
-              <div className="flex flex-col gap-3 items-center">
-                {/* Reward Value text above input */}
-                {trail?.trailValue && (
-                  <p className="text-gray-400 text-sm mb-2">
-                    Reward Value: <span className="line-through">${trail.trailValue}</span>
-                  </p>
-                )}
-                <div className="relative w-80">
-                  <span className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-500 text-lg">$</span>
-                  <input
-                    type="number"
-                    onChange={(e) => setTipAmount(Number(e.target.value) || 0)}
-                    placeholder={`${trail?.suggestedInvestment || 25}`}
-                    className="text-2xl font-bold text-amber-700 bg-white border-2 border-amber-300 rounded-lg outline-none text-center pl-8 pr-4 w-full h-12 placeholder:text-amber-400 placeholder:opacity-60 focus:border-amber-500 focus:ring-2 focus:ring-amber-100 transition-all duration-200"
-                    min="0"
-                    step="0.01"
-                  />
+            {/* Tip CTA - Front and Centre */}
+            <div className="bg-white rounded-xl shadow-lg border border-gray-200 p-8 mb-8">
+              <div className="flex items-center justify-center mb-4">
+                <div className="w-16 h-16 bg-gradient-to-br from-yellow-400 to-amber-500 rounded-full flex items-center justify-center mr-4">
+                  <Gift className="h-8 w-8 text-white" />
                 </div>
-                
-                                <Button
-                  className="bg-gradient-to-r from-yellow-500 to-amber-600 text-white hover:from-yellow-600 hover:to-amber-700 px-8 py-3 text-lg font-semibold shadow-lg w-80 flex items-center justify-center"
+                <div className="text-left">
+                  <h2 className="text-2xl font-bold text-gray-900">Support the Creator</h2>
+                </div>
+              </div>
+
+              <div className="text-center mb-6">
+                <div className="flex flex-col gap-3 items-center">
+                  {/* Reward Value text above input */}
+                  {trail?.trailValue && (
+                    <p className="text-gray-400 text-sm mb-2">
+                      Reward Value: <span className="line-through">${trail.trailValue}</span>
+                    </p>
+                  )}
+                  <div className="relative w-80">
+                    <span className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-500 text-lg">$</span>
+                    <input
+                      type="number"
+                      onChange={(e) => setTipAmount(Number(e.target.value) || 0)}
+                      placeholder={`${trail?.suggestedInvestment || 25}`}
+                      className="text-2xl font-bold text-amber-700 bg-white border-2 border-amber-300 rounded-lg outline-none text-center pl-8 pr-4 w-full h-12 placeholder:text-amber-400 placeholder:opacity-60 focus:border-amber-500 focus:ring-2 focus:ring-amber-100 transition-all duration-200"
+                      min="0"
+                      step="0.01"
+                    />
+                  </div>
+                  
+                  <Button
+                    className="bg-gradient-to-r from-yellow-500 to-amber-600 text-white hover:from-yellow-600 hover:to-amber-700 px-8 py-3 text-lg font-semibold shadow-lg w-80 flex items-center justify-center"
+                    onClick={() => {
+                      const finalTipAmount = tipAmount || trail?.suggestedInvestment || 25;
+                      console.log('🎁 Tip button clicked!', {
+                        tipAmount,
+                        finalTipAmount,
+                        trailId: trail?.id,
+                        creatorId: trail?.creator || '',
+                        creatorName: trail?.creator
+                      });
+                      setTipAmount(finalTipAmount);
+                      
+                      // Use both state and ref for maximum reliability
+                      showTipModalRef.current = true;
+                      setShowTipModal(true);
+                      
+                      console.log('🎁 Modal state set - should appear now');
+                      
+                      // Force a re-render by updating a state that triggers re-render
+                      setTimeout(() => {
+                        setShowTipModal(true); // Force another update
+                        console.log('🎁 Forced re-render - modal should be visible');
+                      }, 50);
+                    }}
+                  >
+                    <Gift className="h-5 w-5 mr-2" />
+                    <span>Tip ${tipAmount || trail?.suggestedInvestment || 25}</span>
+                  </Button>
+                </div>
+              </div>
+              
+              <div className="flex justify-center">
+                <Button 
+                  variant="ghost" 
+                  className="text-gray-400 hover:text-gray-500 underline text-sm py-2"
                   onClick={() => {
-                    const finalTipAmount = tipAmount || trail?.suggestedInvestment || 25;
-                    setTipAmount(finalTipAmount);
-                    setShowTipModal(true);
+                    toast({
+                      title: "No worries!",
+                      description: "You can always tip later from your profile.",
+                    });
+                    setTipCompleted(true);
                   }}
                 >
-                  <Gift className="h-5 w-5 mr-2" />
-                  <span>Tip ${tipAmount || trail?.suggestedInvestment || 25}</span>
+                  Skip for now
                 </Button>
               </div>
             </div>
-            
-            <div className="flex justify-center">
-              <Button 
-                variant="ghost" 
-                className="text-gray-400 hover:text-gray-500 underline text-sm py-2"
-                onClick={() => {
-                  toast({
-                    title: "No worries!",
-                    description: "You can always tip later from your profile.",
-                  });
-                  setTipCompleted(true);
-                }}
-              >
-                Skip for now
-              </Button>
-            </div>
           </div>
         </div>
-      </div>
+      </>
     );
   }
 
@@ -1675,36 +1778,25 @@ const LearnerView: React.FC = () => {
               lastSavedAt: new Date().toISOString(),
             };
             
-            const userTrails = await getUserTrails();
-            const { drafts, published } = userTrails;
+            // Always save to saved trails when learning (regardless of whether user is creator)
+            // This allows creators to also learn their own trails and track progress
+            const savedTrails = JSON.parse(localStorage.getItem(`user_${user.id}_saved`) || '[]');
+            const filteredSaved = savedTrails.filter((t: any) => t.id !== savedTrail.id);
+            localStorage.setItem(`user_${user.id}_saved`, JSON.stringify([...filteredSaved, savedTrail]));
             
-            // Check if user is the creator of this trail
-            const isCreator = trail?.creatorId === user.id || (trail as any)?.creator_id === user.id;
-            
-            if (isCreator) {
-              // If user is creator, save to drafts (their created trails)
-              const allUserTrails = [...drafts, ...published];
-              const filteredTrails = allUserTrails.filter((t: any) => t.id !== savedTrail.id);
-              localStorage.setItem(`user_${user.id}_drafts`, JSON.stringify([...filteredTrails, savedTrail]));
-              
-              // IMPORTANT: Remove from saved trails since they're now the creator
-              const savedTrails = JSON.parse(localStorage.getItem(`user_${user.id}_saved`) || '[]');
-              const filteredSaved = savedTrails.filter((t: any) => t.id !== savedTrail.id);
-              localStorage.setItem(`user_${user.id}_saved`, JSON.stringify(filteredSaved));
-              console.log('🗑️ Removed trail from saved section (user is creator)');
-            } else {
-              // If user is not creator, save to saved trails (trails they're learning)
-              const savedTrails = JSON.parse(localStorage.getItem(`user_${user.id}_saved`) || '[]');
-              const filteredSaved = savedTrails.filter((t: any) => t.id !== savedTrail.id);
-              localStorage.setItem(`user_${user.id}_saved`, JSON.stringify([...filteredSaved, savedTrail]));
-            }
+            console.log('💾 Saved trail to saved section for learning:', {
+              trailId: savedTrail.id,
+              currentStep: currentStepIndex,
+              progressStep: progressStepIndex,
+              completedSteps: Array.from(completedSteps),
+              userId: user.id
+            });
             
             console.log('💾 Manual save progress:', {
               trailId: savedTrail.id,
               currentStep: currentStepIndex,
               progressStep: progressStepIndex,
               completedSteps: Array.from(completedSteps),
-              isCreator,
               userId: user.id
             });
             
@@ -1715,25 +1807,7 @@ const LearnerView: React.FC = () => {
         </Button>
       </div>
 
-      {/* Tip Payment Modal */}
-      <TipPaymentModal
-        isOpen={showTipModal}
-        onClose={() => setShowTipModal(false)}
-        amount={tipAmount || trail?.suggestedInvestment || 25}
-        trailId={trail?.id || ''}
-        creatorId={trail?.creator_id || ''}
-        creatorName={trail?.creator}
-        onSuccess={() => {
-          // Track tip donation
-          analyticsService.trackTipDonated(trail?.id || '', tipAmount || trail?.suggestedInvestment || 25);
-          
-          toast({
-            title: "Thank you!",
-            description: `You've successfully tipped $${tipAmount || trail?.suggestedInvestment || 25} to ${trail?.creator || 'the creator'}!`,
-          });
-          setTipCompleted(true);
-        }}
-      />
+
     </>
   );
 };

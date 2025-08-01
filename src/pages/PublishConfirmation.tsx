@@ -4,21 +4,7 @@ import { CheckCircle, Copy } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
 import { useAuth } from '@/contexts/AuthContext';
-import { TrailStep } from "@/data/sampleTrail";
-
-interface Trail {
-  id: string;
-  title: string;
-  description: string;
-  status: 'published' | 'draft';
-  createdAt: string;
-  views: number;
-  earnings: number;
-  steps: TrailStep[];
-  thumbnailUrl?: string;
-  shareableLink?: string;
-  suggestedInvestment?: number;
-}
+import { Trail } from "@/lib/data";
 
 const PublishConfirmation: React.FC = () => {
   const [publishedTrail, setPublishedTrail] = useState<Trail | null>(null);
@@ -29,7 +15,7 @@ const PublishConfirmation: React.FC = () => {
   useEffect(() => {
     const fetchPublishedTrail = async () => {
       if (!user) {
-        navigate('/profile');
+        console.log('⏳ User not loaded yet, waiting...');
         return;
       }
 
@@ -79,9 +65,9 @@ const PublishConfirmation: React.FC = () => {
         
         setPublishedTrail(latestTrail);
       } else {
-        // If no published trail found, redirect to profile
-        console.log('📄 No published trails found, redirecting to profile');
-        navigate('/profile');
+        // If no published trail found, show a message but don't auto-redirect
+        console.log('📄 No published trails found in database');
+        // Don't auto-redirect - let user decide when to leave the page
       }
 
       // Animate tick in after a short delay

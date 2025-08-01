@@ -67,7 +67,7 @@ const Profile: React.FC = () => {
   const [selectedTrail, setSelectedTrail] = useState<Trail | null>(null);
   const navigate = useNavigate();
   const { user, getUserTrails, saveUserTrail, deleteUserTrail, permanentlyDeleteTrail } = useAuth();
-  const { subscriptionStatus, canCreateTrails, isLoading: subscriptionLoading, clearSubscriptionCache } = useSubscription();
+  const { subscriptionStatus, canCreateTrails, isLoading: subscriptionLoading } = useSubscription();
   
   // Debug logging for subscription status
   console.log('🔍 Profile subscription status:', {
@@ -273,7 +273,8 @@ const Profile: React.FC = () => {
       title: trail.title,
       hasSteps: !!trail.steps,
       stepsCount: trail.steps?.length || 0,
-      steps: trail.steps
+      steps: trail.steps,
+      fullTrailData: JSON.stringify(trail, null, 2)
     });
     localStorage.setItem('editingTrail', JSON.stringify(trail));
     navigate('/creator');
@@ -537,8 +538,11 @@ const Profile: React.FC = () => {
   const [savedTrails, setSavedTrails] = useState<Trail[]>([]);
 
   useEffect(() => {
+    console.log('🔄 Saved trails useEffect triggered with user:', user?.id);
     const loadSavedTrails = async () => {
+      console.log('🔄 loadSavedTrails called with user:', user?.id);
       if (!user) {
+        console.log('❌ No user, setting empty saved trails');
         setSavedTrails([]);
         return;
       }
@@ -550,8 +554,10 @@ const Profile: React.FC = () => {
           userId: user.id,
           savedKey: `user_${user.id}_saved`,
           rawData: savedTrailsData,
-          exists: !!savedTrailsData
+          exists: !!savedTrailsData,
+          localStorageKeys: Object.keys(localStorage).filter(key => key.includes('saved'))
         });
+        console.log('🔍 Raw saved trails data:', savedTrailsData);
         
         if (savedTrailsData) {
           const parsedTrails = JSON.parse(savedTrailsData);
@@ -563,13 +569,25 @@ const Profile: React.FC = () => {
               active: t.active 
             }))
           });
+          console.log('🔍 Full parsed trails data:', parsedTrails);
           
           // Filter for trails with active: true (trails user is actively learning)
           const activeTrails = parsedTrails.filter((trail: any) => trail.active === true);
           console.log('🔍 Active saved trails:', {
             count: activeTrails.length,
-            trails: activeTrails.map((t: any) => ({ id: t.id, title: t.title }))
+            trails: activeTrails.map((t: any) => ({ 
+              id: t.id, 
+              title: t.title, 
+              active: t.active,
+              hasCreator: !!(t.creatorName || t.creator || t.creatorId),
+              creatorInfo: {
+                creatorName: t.creatorName,
+                creator: t.creator,
+                creatorId: t.creatorId
+              }
+            }))
           });
+          console.log('🔍 Full active trails data:', activeTrails);
           setSavedTrails(activeTrails);
         } else {
           console.log('🔍 No saved trails data found');
@@ -581,11 +599,14 @@ const Profile: React.FC = () => {
       }
     };
 
+    console.log('🔄 Calling loadSavedTrails...');
     loadSavedTrails();
 
     // Add storage event listener to detect when saved trails change
     const handleStorageChange = (e: StorageEvent) => {
+      console.log('🔄 Storage change detected:', e.key);
       if (e.key && e.key.includes('_saved')) {
+        console.log('🔄 Reloading saved trails due to storage change');
         loadSavedTrails();
       }
     };
@@ -640,231 +661,12 @@ const Profile: React.FC = () => {
           
           
           {/* Create New Trail Button */}
-          <div className="flex gap-2 items-center">
-            <Link to="/creator">
-              <Button className="bg-black text-white hover:bg-black/90">
-                <Plus className="h-4 w-4 mr-2" />
-                Create New Trail
-              </Button>
-            </Link>
-            {/* Simple Debug Button */}
-            <Button 
-              variant="outline" 
-              size="sm"
-              onClick={() => {
-                try {
-                  console.log('🔍 BUTTON CLICKED!');
-                  const userId = user?.id;
-                  console.log('🔍 User ID:', userId);
-                  
-                  if (!userId) {
-                    alert('No user found!');
-                    return;
-                  }
-                  
-                  // Get all localStorage data
-                  const drafts = localStorage.getItem(`user_${userId}_drafts`);
-                  const published = localStorage.getItem(`user_${userId}_published`);
-                  const saved = localStorage.getItem(`user_${userId}_saved`);
-                  const editing = localStorage.getItem('editingTrail');
-                  
-                  console.log('🔍 RAW LOCALSTORAGE DATA:', {
-                    drafts,
-                    published, 
-                    saved,
-                    editing
-                  });
-                  
-                  // Show alert with data
-                  const message = `
-LOCALSTORAGE DEBUG:
-- Drafts: ${drafts ? 'HAS DATA' : 'EMPTY'}
-- Published: ${published ? 'HAS DATA' : 'EMPTY'} 
-- Saved: ${saved ? 'HAS DATA' : 'EMPTY'}
-- Editing: ${editing ? 'HAS DATA' : 'EMPTY'}
-
-Check console for full details.
-                  `;
-                  
-                  alert(message);
-                  
-                  // Try to recover editing trail if it exists
-                  if (editing) {
-                    const editingTrail = JSON.parse(editing);
-                    if (confirm(`Found editing trail: "${editingTrail.title}". Move to drafts?`)) {
-                      const currentDrafts = JSON.parse(drafts || '[]');
-                      editingTrail.status = 'draft';
-                      currentDrafts.push(editingTrail);
-                      localStorage.setItem(`user_${userId}_drafts`, JSON.stringify(currentDrafts));
-                      localStorage.removeItem('editingTrail');
-                      alert('Recovered! Refreshing...');
-                      window.location.reload();
-                    }
-                  }
-                } catch (error) {
-                  console.error('🔍 DEBUG ERROR:', error);
-                  alert('Debug error: ' + error.message);
-                }
-              }}
-              className="ml-2"
-            >
-              🔍 Debug
+          <Link to="/creator">
+            <Button className="bg-black text-white hover:bg-black/90">
+              <Plus className="h-4 w-4 mr-2" />
+              Create New Trail
             </Button>
-            
-            {/* Recovery function - run in console */}
-                        <button 
-              onClick={() => {
-                const userId = user?.id;
-                if (!userId) return;
-                
-                // Clean up trails that should not be in saved section
-                const draftsKey = `user_${userId}_drafts`;
-                const publishedKey = `user_${userId}_published`;
-                const savedKey = `user_${userId}_saved`;
-                
-                const drafts = JSON.parse(localStorage.getItem(draftsKey) || '[]');
-                const published = JSON.parse(localStorage.getItem(publishedKey) || '[]');
-                const saved = JSON.parse(localStorage.getItem(savedKey) || '[]');
-                
-                // Get all trail IDs that the user created (should not be in saved)
-                const createdTrailIds = new Set([
-                  ...drafts.map((t: any) => t.id),
-                  ...published.map((t: any) => t.id)
-                ]);
-                
-                // Remove creator's own trails from saved section
-                const cleanedSaved = saved.filter((trail: any) => {
-                  const isCreatorTrail = createdTrailIds.has(trail.id) || 
-                    trail.creatorId === userId || 
-                    trail.creator_id === userId;
-                  return !isCreatorTrail;
-                });
-                
-                // Remove duplicate drafts (same title as published)
-                const cleanedDrafts = drafts.filter((draft: any) => {
-                  const hasPublishedVersion = published.some((pub: any) => 
-                    pub.title === draft.title && pub.id !== draft.id
-                  );
-                  return !hasPublishedVersion;
-                });
-                
-                // Save cleaned data
-                localStorage.setItem(savedKey, JSON.stringify(cleanedSaved));
-                localStorage.setItem(draftsKey, JSON.stringify(cleanedDrafts));
-                
-                console.log('🧹 Cleanup results:', {
-                  originalSaved: saved.length,
-                  cleanedSaved: cleanedSaved.length,
-                  originalDrafts: drafts.length,
-                  cleanedDrafts: cleanedDrafts.length,
-                  removedFromSaved: saved.length - cleanedSaved.length
-                });
-                
-                alert(`Cleanup complete! Removed ${saved.length - cleanedSaved.length} creator trails from saved section. Refreshing...`);
-                window.location.reload();
-              }}
-              style={{
-                padding: '8px 16px',
-                backgroundColor: '#dcfce7',
-                border: '1px solid #86efac',
-                borderRadius: '6px',
-                fontSize: '12px',
-                cursor: 'pointer'
-              }}
-            >
-              🧹 Clean Creator/Learner Separation
-            </button>
-            
-            <button 
-              onClick={() => {
-                // Run this in console for manual recovery
-                const recoveryCode = `
-async function manualRecovery() {
-  const userId = "${user?.id}";
-  const savedKey = \`user_\${userId}_saved\`;
-  const saved = JSON.parse(localStorage.getItem(savedKey) || '[]');
-
-  console.log('🔍 Manual Recovery Debug:', {
-    userId,
-    savedTotal: saved.length,
-    savedTrails: saved
-  });
-
-  if (saved.length === 0) {
-    console.log('❌ No saved trails found');
-    return;
-  }
-
-  for (const trail of saved) {
-    console.log(\`🔄 Recovering: \${trail.title}\`);
-
-    const trailData = {
-      ...trail,
-      creatorId: userId,
-      creator_id: userId,
-      status: 'published',
-      updatedAt: new Date().toISOString()
-    };
-
-    try {
-      const response = await fetch('/api/trails', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ trail: trailData, type: 'published' })
-      });
-
-      if (response.ok) {
-        console.log(\`✅ Successfully recovered: \${trail.title}\`);
-      } else {
-        console.log(\`❌ Failed to recover: \${trail.title}\`, await response.text());
-      }
-    } catch (error) {
-      console.log(\`❌ Error recovering \${trail.title}:\`, error);
-    }
-  }
-
-  console.log('🔄 Recovery complete. Refreshing page...');
-  window.location.reload();
-}
-
-manualRecovery();
-                                `;
-
-                console.log('🆘 MANUAL RECOVERY CODE:');
-                console.log('Copy and paste this into the console:');
-                console.log(recoveryCode);
-                alert('Recovery code logged to console! Copy and paste it to recover your trails.');
-              }}
-              style={{
-                padding: '8px 16px',
-                backgroundColor: '#fef2f2',
-                border: '1px solid #fecaca',
-                borderRadius: '6px',
-                fontSize: '12px',
-                cursor: 'pointer'
-              }}
-            >
-              🆘 Manual Recovery
-            </button>
-            
-            <button 
-              onClick={() => {
-                console.log('🔄 Clearing subscription cache and reloading...');
-                clearSubscriptionCache();
-                setTimeout(() => window.location.reload(), 500);
-              }}
-              style={{
-                padding: '8px 16px',
-                backgroundColor: '#dbeafe',
-                border: '1px solid #93c5fd',
-                borderRadius: '6px',
-                fontSize: '12px',
-                cursor: 'pointer'
-              }}
-            >
-              🔄 Fix Subscription Status
-            </button>
-          </div>
+          </Link>
         </div>
 
         {/* Trails Tabs */}
@@ -888,10 +690,10 @@ manualRecovery();
                   id: trail.id,
                   title: trail.title,
                   shareableLink: (trail as any).shareableLink,
-                  fallbackLink: `/learner/${trail.id}`
+                  fallbackLink: `/trail/${trail.id}`
                 });
                 if (typeof window !== 'undefined') {
-                  const targetUrl = (trail as any).shareableLink || `/learner/${trail.id}`;
+                  const targetUrl = (trail as any).shareableLink || `/trail/${trail.id}`;
                   console.log('🔍 Opening URL:', targetUrl);
                   window.location.href = targetUrl;
                 }

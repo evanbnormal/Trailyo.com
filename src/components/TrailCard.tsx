@@ -1,5 +1,5 @@
 import { Card } from '@/components/ui/card';
-import { Trash2, Gift } from 'lucide-react';
+import { Trash2, Gift, CheckCircle } from 'lucide-react';
 
 export const SavedTrailCard: React.FC<{ trail: any; onClick?: () => void; onDelete?: () => void }> = ({ trail, onClick, onDelete }) => {
   // Calculate progress percentage if available
@@ -25,14 +25,13 @@ export const SavedTrailCard: React.FC<{ trail: any; onClick?: () => void; onDele
           <h3 className="text-xl font-bold text-gray-900 truncate">{trail.title}</h3>
           <p className="text-gray-600 text-sm line-clamp-2">{trail.description}</p>
           <div className="flex justify-between items-end mt-4 w-full">
-            {/* Delete button bottom left */}
-            <button 
-              className="p-2 rounded text-gray-400 hover:text-red-500 transition-colors"
-              onClick={e => { e.stopPropagation(); if (onDelete) onDelete(); }}
-              title="Delete saved trail"
-            >
-              <Trash2 className="w-4 h-4" />
-            </button>
+            {/* Creator name with blue tick bottom left */}
+            <div className="flex items-center gap-1">
+              <CheckCircle className="w-4 h-4 text-blue-500" />
+              <span className="text-sm text-gray-600 font-medium">
+                {trail.creatorName || trail.creator || 'Unknown Creator'}
+              </span>
+            </div>
             <div className="flex items-center gap-2">
               {/* Progress icon */}
               <div className="relative w-8 h-8 flex items-center justify-center">

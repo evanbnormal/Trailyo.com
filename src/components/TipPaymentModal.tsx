@@ -1,8 +1,14 @@
 import React from 'react';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
-import { StripePayment } from '@/components/StripePayment';
 import { Gift, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
+import { StripePayment } from './StripePayment';
 
 interface TipPaymentModalProps {
   isOpen: boolean;
@@ -23,10 +29,26 @@ export const TipPaymentModal: React.FC<TipPaymentModalProps> = ({
   creatorName,
   onSuccess,
 }) => {
+  console.log('🎁 TipPaymentModal rendered with:', {
+    isOpen,
+    amount,
+    trailId,
+    creatorId,
+    creatorName
+  });
+
   const handleSuccess = () => {
+    console.log('🎁 Tip payment successful!');
     onSuccess();
     onClose();
   };
+
+  if (!isOpen) {
+    console.log('🎁 TipPaymentModal: isOpen is false, not rendering');
+    return null;
+  }
+
+  console.log('🎁 TipPaymentModal: isOpen is true, rendering modal');
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>

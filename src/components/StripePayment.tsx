@@ -132,10 +132,12 @@ const PaymentForm: React.FC<{
       <div className="space-y-4 sm:space-y-6 w-full">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between p-4 bg-gray-50 rounded-lg space-y-3 sm:space-y-0">
           <div className="flex items-center space-x-3">
-            <Gift className="h-5 w-5 text-green-600" />
+            <Gift className={`h-5 w-5 ${type === 'tip' ? 'text-yellow-500' : 'text-green-600'}`} />
             <div>
-              <p className="font-medium">Skip Payment</p>
-              <p className="text-sm text-gray-600">Pay to unlock this step</p>
+              <p className="font-medium">{type === 'tip' ? 'Tip Payment' : 'Skip Payment'}</p>
+              <p className="text-sm text-gray-600">
+                {type === 'tip' ? 'Support the creator' : 'Pay to unlock this step'}
+              </p>
             </div>
           </div>
           <div className="text-center sm:text-right">
@@ -201,6 +203,7 @@ export const StripePayment: React.FC<StripePaymentProps> = ({
 
   useEffect(() => {
     const createPaymentIntent = async () => {
+      console.log('💳 Creating payment intent:', { amount, trailId, creatorId, type });
       try {
         const response = await fetch('/api/payments/create-intent', {
           method: 'POST',
@@ -271,6 +274,7 @@ export const StripePayment: React.FC<StripePaymentProps> = ({
         creatorId={creatorId}
         onSuccess={onSuccess}
         onCancel={onCancel}
+        type={type}
       />
     </Elements>
   );

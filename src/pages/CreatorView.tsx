@@ -1551,7 +1551,6 @@ const CreatorView: React.FC = () => {
       }
       
       // Always navigate to publish confirmation page, regardless of whether it's a draft or new trail
-      toast.success('Trail published successfully!');
       navigate('/publish-confirmation');
     } catch (error) {
       console.error('Error publishing trail:', error);

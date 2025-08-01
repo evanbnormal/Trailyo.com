@@ -22,6 +22,8 @@ interface AuthContextType {
   saveUserTrail: (trail: Trail, type: 'draft' | 'published') => Promise<void>;
   deleteUserTrail: (trailId: string, type: 'draft' | 'published') => Promise<void>;
   permanentlyDeleteTrail: (trailId: string) => Promise<void>;
+  removeTrailFromAllSavedTrails: (trailId: string) => void;
+  removeTrailFromCurrentUserSavedTrails: (trailId: string) => void;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -289,7 +291,10 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
             id: t.id, 
             title: t.title, 
             creatorId: t.creatorId,
-            status: t.status 
+            status: t.status,
+            hasSteps: !!t.steps,
+            stepsCount: t.steps?.length || 0,
+            stepsPreview: t.steps?.map((s: any) => ({ id: s.id, title: s.title, type: s.type })) || []
           }))
         });
         
@@ -369,6 +374,29 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     console.log('🔄 AuthContext.saveUserTrail called with:', trail.id, 'type:', type);
 
     try {
+      // Check if this trail is being changed from published to draft
+      const existingPublishedKey = `user_${user.id}_published`;
+      const existingPublished = JSON.parse(localStorage.getItem(existingPublishedKey) || '[]');
+      const wasPublished = existingPublished.some((t: any) => t.id === trail.id);
+      
+      console.log(`🔍 Trail ${trail.id} status check:`, {
+        wasPublished,
+        type,
+        existingPublishedCount: existingPublished.length,
+        existingPublishedIds: existingPublished.map((t: any) => t.id)
+      });
+      
+      if (wasPublished && type === 'draft') {
+        console.log(`🚨 Trail ${trail.id} is being changed from published to draft - creating new trail instead`);
+        // Generate a new trail ID for the draft version
+        const newTrailId = `trail-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+        trail.id = newTrailId;
+        console.log(`🆕 New trail ID generated: ${newTrailId}`);
+        
+        // Don't remove from saved trails - let existing users keep their progress
+        toast.info('New draft version created. Existing users can continue with the original version.');
+      }
+
       // Convert blob URLs before saving
       const convertedTrail = await convertBlobUrlsInTrail(trail);
       
@@ -403,27 +431,27 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       console.log('✅ Trail saved to database successfully:', result);
 
       // Also save to localStorage as backup after successful database save
-      const draftKey = `user_${user.id}_drafts`;
-      const publishedKey = `user_${user.id}_published`;
+      const localStorageDraftKey = `user_${user.id}_drafts`;
+      const localStoragePublishedKey = `user_${user.id}_published`;
       
       if (type === 'draft') {
-        const drafts = JSON.parse(localStorage.getItem(draftKey) || '[]');
+        const drafts = JSON.parse(localStorage.getItem(localStorageDraftKey) || '[]');
         const existingIndex = drafts.findIndex((t: any) => t.id === trail.id);
         if (existingIndex >= 0) {
           drafts[existingIndex] = convertedTrail;
         } else {
           drafts.push(convertedTrail);
         }
-        localStorage.setItem(draftKey, JSON.stringify(drafts));
+        localStorage.setItem(localStorageDraftKey, JSON.stringify(drafts));
       } else {
-        const published = JSON.parse(localStorage.getItem(publishedKey) || '[]');
+        const published = JSON.parse(localStorage.getItem(localStoragePublishedKey) || '[]');
         const existingIndex = published.findIndex((t: any) => t.id === trail.id);
         if (existingIndex >= 0) {
           published[existingIndex] = convertedTrail;
         } else {
           published.push(convertedTrail);
         }
-        localStorage.setItem(publishedKey, JSON.stringify(published));
+        localStorage.setItem(localStoragePublishedKey, JSON.stringify(published));
       }
 
               toast.success(`Trail ${type === 'draft' ? 'saved' : 'published'} to database successfully!`);
@@ -431,28 +459,28 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       console.error('❌ Database save failed, falling back to localStorage:', error);
       
       // Fallback: Save to localStorage only when database fails
-      const draftKey = `user_${user.id}_drafts`;
-      const publishedKey = `user_${user.id}_published`;
+      const fallbackDraftKey = `user_${user.id}_drafts`;
+      const fallbackPublishedKey = `user_${user.id}_published`;
       
       try {
         if (type === 'draft') {
-          const drafts = JSON.parse(localStorage.getItem(draftKey) || '[]');
+          const drafts = JSON.parse(localStorage.getItem(fallbackDraftKey) || '[]');
           const existingIndex = drafts.findIndex((t: any) => t.id === trail.id);
           if (existingIndex >= 0) {
-            drafts[existingIndex] = trailWithUserId;
+            drafts[existingIndex] = trail;
           } else {
-            drafts.push(trailWithUserId);
+            drafts.push(trail);
           }
-          localStorage.setItem(draftKey, JSON.stringify(drafts));
+          localStorage.setItem(fallbackDraftKey, JSON.stringify(drafts));
         } else {
-          const published = JSON.parse(localStorage.getItem(publishedKey) || '[]');
+          const published = JSON.parse(localStorage.getItem(fallbackPublishedKey) || '[]');
           const existingIndex = published.findIndex((t: any) => t.id === trail.id);
           if (existingIndex >= 0) {
-            published[existingIndex] = trailWithUserId;
+            published[existingIndex] = trail;
           } else {
-            published.push(trailWithUserId);
+            published.push(trail);
           }
-          localStorage.setItem(publishedKey, JSON.stringify(published));
+          localStorage.setItem(fallbackPublishedKey, JSON.stringify(published));
         }
         
         toast.warning(`Trail saved locally only (database connection failed). Data may be lost on server restart.`);
@@ -529,6 +557,61 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     }
   };
 
+  const removeTrailFromAllSavedTrails = (trailId: string): void => {
+    console.log(`🚨 Removing trail ${trailId} from all users' saved trails`);
+    
+    // Get all localStorage keys that contain saved trails
+    const allKeys = Object.keys(localStorage);
+    const savedTrailKeys = allKeys.filter(key => key.includes('_saved'));
+    
+    let removedCount = 0;
+    
+    savedTrailKeys.forEach(key => {
+      try {
+        const savedTrails = JSON.parse(localStorage.getItem(key) || '[]');
+        const originalLength = savedTrails.length;
+        const filteredTrails = savedTrails.filter((trail: any) => trail.id !== trailId);
+        
+        if (filteredTrails.length < originalLength) {
+          localStorage.setItem(key, JSON.stringify(filteredTrails));
+          removedCount++;
+          console.log(`✅ Removed trail ${trailId} from ${key}`);
+        }
+      } catch (error) {
+        console.error(`❌ Error removing trail from ${key}:`, error);
+      }
+    });
+    
+    console.log(`🚨 Removed trail ${trailId} from ${removedCount} users' saved trails`);
+    
+    if (removedCount > 0) {
+      toast.info(`Trail removed from ${removedCount} users' saved trails`);
+    }
+  };
+
+  const removeTrailFromCurrentUserSavedTrails = (trailId: string): void => {
+    if (!user) return;
+    
+    console.log(`🧹 Removing trail ${trailId} from current user's saved trails`);
+    
+    const savedKey = `user_${user.id}_saved`;
+    try {
+      const savedTrails = JSON.parse(localStorage.getItem(savedKey) || '[]');
+      const originalLength = savedTrails.length;
+      const filteredTrails = savedTrails.filter((trail: any) => trail.id !== trailId);
+      
+      if (filteredTrails.length < originalLength) {
+        localStorage.setItem(savedKey, JSON.stringify(filteredTrails));
+        console.log(`✅ Removed trail ${trailId} from current user's saved trails`);
+        toast.success(`Trail removed from your saved trails`);
+      } else {
+        console.log(`ℹ️ Trail ${trailId} not found in current user's saved trails`);
+      }
+    } catch (error) {
+      console.error(`❌ Error removing trail from current user's saved trails:`, error);
+    }
+  };
+
   const value: AuthContextType = {
     user,
     isAuthenticated,
@@ -540,6 +623,8 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     saveUserTrail,
     deleteUserTrail,
     permanentlyDeleteTrail,
+    removeTrailFromAllSavedTrails,
+    removeTrailFromCurrentUserSavedTrails,
   };
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

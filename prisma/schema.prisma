@@ -38,16 +38,17 @@ model Trail {
 }
 
 model TrailStep {
-  id        String   @id @default(uuid())
-  trailId   String
-  title     String
-  content   String
-  order     Int
-  type      String   @default("article")
-  source    String?
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-  trail     Trail    @relation(fields: [trailId], references: [id], onDelete: Cascade)
+  id           String   @id @default(uuid())
+  trailId      String
+  title        String
+  content      String
+  order        Int
+  type         String   @default("article")
+  source       String?
+  thumbnailUrl String?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+  trail        Trail    @relation(fields: [trailId], references: [id], onDelete: Cascade)
 }
 
 model AnalyticsEvent {

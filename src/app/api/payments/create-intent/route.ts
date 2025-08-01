@@ -9,6 +9,7 @@ export async function POST(request: NextRequest) {
   try {
     // Check if Stripe is configured
     if (!process.env.STRIPE_SECRET_KEY) {
+      console.error('❌ Stripe secret key not configured');
       return NextResponse.json(
         { error: 'Stripe is not configured. Please add STRIPE_SECRET_KEY to your environment variables.' },
         { status: 500 }
@@ -16,6 +17,8 @@ export async function POST(request: NextRequest) {
     }
 
     const { amount, trailId, creatorId, type = 'skip_payment' } = await request.json();
+    
+    console.log('💳 Payment intent request:', { amount, trailId, creatorId, type });
 
     if (!amount || amount <= 0) {
       return NextResponse.json(
@@ -41,6 +44,7 @@ export async function POST(request: NextRequest) {
       },
     });
 
+    console.log('✅ Payment intent created successfully');
     return NextResponse.json({
       clientSecret: paymentIntent.client_secret,
     });
