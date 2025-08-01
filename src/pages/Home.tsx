@@ -12,6 +12,7 @@ import { useSubscription } from '@/hooks/useSubscription';
 const Home: React.FC = () => {
   const [showLoginModal, setShowLoginModal] = useState(false);
   const [showSubscriptionModal, setShowSubscriptionModal] = useState(false);
+  const [showConfirmationMessage, setShowConfirmationMessage] = useState(false);
   const { isAuthenticated, login } = useAuth();
   const { canCreateTrails, startSubscription } = useSubscription();
   const navigate = useNavigate();
@@ -27,12 +28,33 @@ const Home: React.FC = () => {
         window.history.replaceState({}, '', url.pathname + url.search);
       }
       
-      // Handle email confirmation - just clean up URL params silently
+      // Handle email confirmation
       if (searchParams.get('confirmed') === 'true') {
+        const email = searchParams.get('email');
+        const fromTrail = searchParams.get('fromTrail') === 'true';
+        
+        // Check if user signed up from a trail and redirect them back
+        if (email && fromTrail) {
+          const storedTrailUrl = localStorage.getItem(`pending_confirmation_${email}`);
+          if (storedTrailUrl) {
+            // Clean up the stored URL
+            localStorage.removeItem(`pending_confirmation_${email}`);
+            
+            // Show success message
+            setShowConfirmationMessage(true);
+            
+            // Redirect back to trail after a short delay
+            setTimeout(() => {
+              navigate(storedTrailUrl.replace(window.location.origin, ''));
+            }, 2000);
+          }
+        }
+        
         // Remove the params from the URL silently
         const url = new URL(window.location.href);
         url.searchParams.delete('confirmed');
         url.searchParams.delete('email');
+        url.searchParams.delete('fromTrail');
         url.searchParams.delete('autoLogin');
         window.history.replaceState({}, '', url.pathname + url.search);
       }
@@ -56,6 +78,24 @@ const Home: React.FC = () => {
 
   return (
     <>
+      {/* Email Confirmation Success Message */}
+      {showConfirmationMessage && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg p-8 max-w-md mx-4 text-center">
+            <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-4">
+              <svg className="w-8 h-8 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+              </svg>
+            </div>
+            <h2 className="text-2xl font-bold text-gray-900 mb-2">Email Confirmed!</h2>
+            <p className="text-gray-600 mb-4">
+              Your account has been successfully verified. Redirecting you back to the trail...
+            </p>
+            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-gray-900 mx-auto"></div>
+          </div>
+        </div>
+      )}
+
       <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 flex items-center justify-center">
         <div className="text-center max-w-2xl mx-auto px-6">
           <h1 className="text-5xl font-bold text-gray-900 mb-6">

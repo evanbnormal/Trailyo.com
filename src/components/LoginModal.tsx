@@ -89,6 +89,12 @@ const LoginModal: React.FC<LoginModalProps> = ({ isOpen, onClose, onSuccess }) =
 
     setIsLoading(true);
     try {
+      // Store current trail URL for redirect after confirmation
+      const currentUrl = window.location.href;
+      if (currentUrl.includes('/trail/')) {
+        localStorage.setItem(`pending_confirmation_${signupEmail}`, currentUrl);
+      }
+
       const result = await signup(signupEmail, signupPassword, signupName);
       if (result === true || result === 'unconfirmed_user') {
         setConfirmationEmail(signupEmail);

@@ -31,9 +31,10 @@ export async function GET(request: NextRequest) {
 
         console.log('Email confirmed for:', email);
         
-        // Redirect to homepage with success parameters
+        // Check if there's a stored trail URL for this user
+        // We'll redirect to homepage with trail info, and the frontend will handle the redirect
         const baseUrl = process.env.BASE_URL || 'http://localhost:3000';
-        return NextResponse.redirect(new URL(`/?confirmed=true&email=${encodeURIComponent(email)}`, baseUrl));
+        return NextResponse.redirect(new URL(`/?confirmed=true&email=${encodeURIComponent(email)}&fromTrail=true`, baseUrl));
         
       } catch (dbError) {
         console.error('Database error during confirmation:', dbError);
@@ -65,9 +66,10 @@ export async function GET(request: NextRequest) {
 
         console.log('Email confirmed for:', tokenData.email);
         
-        // Redirect to homepage with success parameters
+        // Check if there's a stored trail URL for this user
+        // We'll redirect to homepage with trail info, and the frontend will handle the redirect
         const baseUrl = process.env.BASE_URL || 'http://localhost:3000';
-        return NextResponse.redirect(new URL(`/?confirmed=true&email=${encodeURIComponent(tokenData.email)}`, baseUrl));
+        return NextResponse.redirect(new URL(`/?confirmed=true&email=${encodeURIComponent(tokenData.email)}&fromTrail=true`, baseUrl));
         
       } catch (dbError) {
         console.error('Database error during confirmation:', dbError);
