@@ -1521,6 +1521,11 @@ const LearnerView: React.FC = () => {
                         <div
                           className={isStepLocked(currentStepIndex) ? 'blur-[16px] pointer-events-auto select-none relative cursor-pointer' : ''}
                           onClick={isStepLocked(currentStepIndex) ? () => {
+                            // Check if user is authenticated before showing skip dialog
+                            if (!isAuthenticated) {
+                              setShowLoginModal(true);
+                              return;
+                            }
                             setSkipTargetStep(currentStepIndex);
                             // Save trail ID to localStorage for payment success redirect
                             if (trail?.id) {
@@ -1590,12 +1595,8 @@ const LearnerView: React.FC = () => {
                                 variant="link"
                                 className="underline text-gray-500 mx-auto"
                                 onClick={() => {
-                                  if (!isAuthenticated || !user) {
-                                    toast({
-                                      title: "Sign in required",
-                                      description: "Please sign in to make payments.",
-                                      variant: "destructive",
-                                    });
+                                  if (!isAuthenticated) {
+                                    setShowLoginModal(true);
                                     return;
                                   }
                                   setSkipToStep(currentStepIndex);
