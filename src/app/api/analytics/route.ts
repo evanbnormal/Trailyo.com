@@ -105,18 +105,47 @@ function calculateAnalyticsFromEvents(trailId: string, events: any[]) {
   console.log('📊 Total events:', events.length);
   console.log('📊 Event types:', events.map(e => e.eventType));
   
-  // 1. TOTAL LEARNERS: Count unique trail views (each visit counts as a learner)
+  // 1. TOTAL LEARNERS: Count unique active learners (people who take action)
   const trailViews = events.filter(e => e.eventType === 'trail_view');
-  console.log('📊 Trail views found:', trailViews.length);
-  console.log('📊 Trail view session IDs:', trailViews.map(e => e.data.sessionId));
-  
-  // Count all visits as learners (each visit = one learner interaction)
-  const totalLearners = trailViews.length;
-  console.log('📊 Total learner visits calculated:', totalLearners);
-  
-  // 2. REVENUE: All cash from Stripe payments (skip payments + tips)
+  const videoWatches = events.filter(e => e.eventType === 'video_watch');
   const stepSkips = events.filter(e => e.eventType === 'step_skip');
   const tips = events.filter(e => e.eventType === 'tip_donated');
+  const stepCompletions = events.filter(e => e.eventType === 'step_complete');
+  
+  // Count people who have taken action (watched video, skipped step, tipped, or completed step)
+  // Only count trail views that have associated action events
+  const activeSessionIds = new Set();
+  
+  // Add session IDs from trail views that have associated actions
+  trailViews.forEach(trailView => {
+    const sessionId = trailView.data.sessionId;
+    if (sessionId) {
+      // Check if this session has any action events (video watch, skip, tip, complete)
+      const hasActions = videoWatches.some(e => e.data.sessionId === sessionId) ||
+                       stepSkips.some(e => e.data.sessionId === sessionId) ||
+                       tips.some(e => e.data.sessionId === sessionId) ||
+                       stepCompletions.some(e => e.data.sessionId === sessionId);
+      
+      if (hasActions) {
+        activeSessionIds.add(sessionId);
+      }
+    }
+  });
+  
+  // Also add any action events that don't have session IDs (fallback)
+  if (videoWatches.length > 0 || stepSkips.length > 0 || tips.length > 0 || stepCompletions.length > 0) {
+    // If we have action events, count at least 1 learner
+    activeSessionIds.add('active_learner');
+  }
+  
+  console.log('📊 Trail views found:', trailViews.length);
+  console.log('📊 Active session IDs:', Array.from(activeSessionIds));
+  
+  // Count unique active learners (people who take action)
+  const totalLearners = activeSessionIds.size;
+  console.log('📊 Total active learners calculated:', totalLearners);
+  
+  // 2. REVENUE: All cash from Stripe payments (skip payments + tips)
   const skipRevenue = stepSkips.reduce((total, event) => total + (event.data.skipCost || 0), 0);
   const tipRevenue = tips.reduce((total, event) => total + (event.data.tipAmount || 0), 0);
   const totalRevenue = skipRevenue + tipRevenue;
@@ -126,7 +155,6 @@ function calculateAnalyticsFromEvents(trailId: string, events: any[]) {
   
   // 4. COMPLETION RATE: People who reach the reward vs total learners
   // A trail is completed when someone reaches the final step (reward)
-  const stepCompletions = events.filter(e => e.eventType === 'step_complete');
   const finalStepCompletions = stepCompletions.filter(e => e.data.stepIndex === 1); // Reward step (index 1)
   const completionRate = totalLearners > 0 ? (finalStepCompletions.length / totalLearners) * 100 : 0;
   
@@ -198,7 +226,6 @@ function calculateAnalyticsFromEvents(trailId: string, events: any[]) {
     });
   
   // 5. WATCH TIME: Total minutes watched across all videos
-  const videoWatches = events.filter(e => e.eventType === 'video_watch');
   // Use actual watch time in minutes (no conversion needed)
   const totalWatchTime = videoWatches.reduce((total, event) => {
     const watchTimeMinutes = event.data.watchTime || 0;
