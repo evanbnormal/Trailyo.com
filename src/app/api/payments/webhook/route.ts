@@ -70,6 +70,15 @@ export async function POST(request: NextRequest) {
         await handlePaymentMethodAttached(event.data.object as Stripe.PaymentMethod);
         break;
 
+      // Payment Intent Events (for trail payments)
+      case 'payment_intent.succeeded':
+        await handlePaymentIntentSucceeded(event.data.object as Stripe.PaymentIntent);
+        break;
+
+      case 'payment_intent.payment_failed':
+        await handlePaymentIntentFailed(event.data.object as Stripe.PaymentIntent);
+        break;
+
       default:
         console.log(`⚠️ Unhandled event type: ${event.type}`);
     }
@@ -319,6 +328,46 @@ async function handleCustomerCreated(customer: Stripe.Customer) {
 // Payment Method Attached - Log for reference
 async function handlePaymentMethodAttached(paymentMethod: Stripe.PaymentMethod) {
   console.log(`💳 Payment method attached: ${paymentMethod.id} to customer: ${paymentMethod.customer}`);
+}
+
+// Payment Intent Succeeded - Trail payments (skips and tips)
+async function handlePaymentIntentSucceeded(paymentIntent: Stripe.PaymentIntent) {
+  console.log(`💰 Payment intent succeeded: ${paymentIntent.id}`);
+  console.log(`🔍 Payment intent metadata:`, paymentIntent.metadata);
+  
+  const { trailId, creatorId, type } = paymentIntent.metadata;
+  const amount = paymentIntent.amount / 100; // Convert from cents to dollars
+  
+  if (!trailId) {
+    console.error('❌ No trailId in payment intent metadata:', paymentIntent.id);
+    return;
+  }
+
+  try {
+    // Record analytics event based on payment type
+    const analyticsService = (await import('@/lib/analytics')).analyticsService;
+    
+    if (type === 'skip_payment') {
+      console.log(`📊 Recording skip payment analytics: $${amount} for trail ${trailId}`);
+      await analyticsService.trackStepSkip(trailId, 0, 'Skip Payment', amount);
+    } else if (type === 'tip') {
+      console.log(`📊 Recording tip payment analytics: $${amount} for trail ${trailId}`);
+      await analyticsService.trackTipDonated(trailId, amount);
+    } else {
+      console.log(`📊 Recording generic payment analytics: $${amount} for trail ${trailId}`);
+      await analyticsService.trackTipDonated(trailId, amount);
+    }
+    
+    console.log(`✅ Analytics event recorded for payment intent: ${paymentIntent.id}`);
+  } catch (error) {
+    console.error('❌ Failed to record analytics for payment intent:', error);
+  }
+}
+
+// Payment Intent Failed - Log for reference
+async function handlePaymentIntentFailed(paymentIntent: Stripe.PaymentIntent) {
+  console.log(`❌ Payment intent failed: ${paymentIntent.id}`);
+  console.log(`🔍 Payment intent metadata:`, paymentIntent.metadata);
 }
 
 // Helper: Create subscription from setup intent

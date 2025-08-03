@@ -60,6 +60,14 @@ model AnalyticsEvent {
   user      User?    @relation(fields: [userId], references: [id])
 }
 
+model TrailAnalyticsEvent {
+  id        String   @id @default(uuid())
+  trailId   String
+  eventType String   // 'trail_view' | 'step_complete' | 'step_skip' | 'tip_donated' | 'trail_complete' | 'video_watch'
+  data      Json?
+  timestamp DateTime @default(now())
+}
+
 model ResetToken {
   id        String   @id @default(uuid())
   email     String

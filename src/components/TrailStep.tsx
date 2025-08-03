@@ -54,10 +54,9 @@ const TrailStep: React.FC<TrailStepProps> = ({
             videoId,
             events: {
               'onStateChange': (event: any) => {
-                // Video has ended - YT.PlayerState.ENDED = 0
-                if (event.data === 0) {
-                  setVideoCompleted(true);
-                }
+                // Note: This component doesn't track watch time, so we don't auto-complete on video end
+                // The main LearnerView component handles the 80% watch time requirement
+                // Users need to manually complete the step after watching
               }
             }
           });

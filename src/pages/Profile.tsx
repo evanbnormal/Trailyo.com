@@ -65,6 +65,7 @@ const Profile: React.FC = () => {
   const [currentTrail, setCurrentTrail] = useState<Trail | null>(null);
   const [showThumbnailDialog, setShowThumbnailDialog] = useState(false);
   const [selectedTrail, setSelectedTrail] = useState<Trail | null>(null);
+  const [showDeleteSavedDialog, setShowDeleteSavedDialog] = useState(false);
   const navigate = useNavigate();
   const { user, getUserTrails, saveUserTrail, deleteUserTrail, permanentlyDeleteTrail } = useAuth();
   const { subscriptionStatus, canCreateTrails, isLoading: subscriptionLoading } = useSubscription();
@@ -288,6 +289,40 @@ const Profile: React.FC = () => {
   const handleChangeThumbnail = (trail: Trail) => {
     setSelectedTrail(trail);
     setShowThumbnailDialog(true);
+  };
+
+  const handleDeleteSavedTrail = (trail: Trail) => {
+    setTrailToDelete(trail);
+    setShowDeleteSavedDialog(true);
+  };
+
+  const confirmDeleteSavedTrail = () => {
+    if (!user || !trailToDelete) return;
+    
+    try {
+      // Load current saved trails
+      const savedTrailsData = localStorage.getItem(`user_${user.id}_saved`);
+      if (savedTrailsData) {
+        const savedTrails = JSON.parse(savedTrailsData);
+        
+        // Remove the trail from saved trails
+        const updatedSavedTrails = savedTrails.filter((savedTrail: any) => savedTrail.id !== trailToDelete.id);
+        
+        // Save back to localStorage
+        localStorage.setItem(`user_${user.id}_saved`, JSON.stringify(updatedSavedTrails));
+        
+        // Update state
+        setSavedTrails(updatedSavedTrails.filter((t: any) => t.active === true));
+        
+        toast.success("Trail removed from your saved trails.");
+      }
+    } catch (error) {
+      console.error('Error deleting saved trail:', error);
+              toast.error("Failed to remove the trail. Please try again.");
+    }
+    
+    setShowDeleteSavedDialog(false);
+    setTrailToDelete(null);
   };
 
   const handleThumbnailUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -685,19 +720,24 @@ const Profile: React.FC = () => {
               ) : (
                 <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-2 gap-6">
                   {savedTrails.map((trail: Trail) => (
-                    <SavedTrailCard key={trail.id} trail={trail} onClick={() => {
-                console.log('🔍 Clicking saved trail:', {
-                  id: trail.id,
-                  title: trail.title,
-                  shareableLink: (trail as any).shareableLink,
-                  fallbackLink: `/trail/${trail.id}`
-                });
-                if (typeof window !== 'undefined') {
-                  const targetUrl = (trail as any).shareableLink || `/trail/${trail.id}`;
-                  console.log('🔍 Opening URL:', targetUrl);
-                  window.location.href = targetUrl;
-                }
-              }} />
+                    <SavedTrailCard 
+                      key={trail.id} 
+                      trail={trail} 
+                      onClick={() => {
+                        console.log('🔍 Clicking saved trail:', {
+                          id: trail.id,
+                          title: trail.title,
+                          shareableLink: (trail as any).shareableLink,
+                          fallbackLink: `/trail/${trail.id}`
+                        });
+                        if (typeof window !== 'undefined') {
+                          const targetUrl = (trail as any).shareableLink || `/trail/${trail.id}`;
+                          console.log('🔍 Opening URL:', targetUrl);
+                          window.location.href = targetUrl;
+                        }
+                      }}
+                      onDelete={() => handleDeleteSavedTrail(trail)}
+                    />
                   ))}
                 </div>
               )}
@@ -840,6 +880,26 @@ const Profile: React.FC = () => {
             </Button>
             <Button variant="destructive" onClick={confirmDelete}>
               Permanently Delete
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Delete Saved Trail Confirmation Dialog */}
+      <Dialog open={showDeleteSavedDialog} onOpenChange={setShowDeleteSavedDialog}>
+        <DialogContent className="mx-auto w-auto flex flex-col items-center justify-center text-center">
+          <DialogHeader>
+            <DialogTitle>Remove Saved Trail</DialogTitle>
+            <DialogDescription>
+              Are you sure you want to remove "{trailToDelete?.title}" from your saved trails? This will remove it from your profile but won't delete the trail itself.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="flex justify-end gap-3">
+            <Button variant="outline" onClick={() => setShowDeleteSavedDialog(false)}>
+              Cancel
+            </Button>
+            <Button variant="destructive" onClick={confirmDeleteSavedTrail}>
+              Remove Trail
             </Button>
           </div>
         </DialogContent>

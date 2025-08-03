@@ -78,9 +78,11 @@ const TrailViewer: React.FC<TrailViewerProps> = ({ trail }) => {
         height: '100%',
         width: '100%',
         playerVars: {
-          controls: 1,
+          controls: 1, // Enable normal YouTube controls
           modestbranding: 1,
           rel: 0,
+          showinfo: 0, // Hide video title and uploader info
+          iv_load_policy: 3, // Disable video annotations
         },
         events: {
           onStateChange: (event: any) => {
@@ -103,6 +105,18 @@ const TrailViewer: React.FC<TrailViewerProps> = ({ trail }) => {
                   clearInterval(interval);
                 }
               }, 1000);
+            } else if (typeof window !== 'undefined' && event.data === window.YT.PlayerState.ENDED) {
+              // Video ended, but only mark as completed if 80% was watched
+              const currentProgress = videoProgress[stepIndex] || 0;
+              if (currentProgress >= 80) {
+                setVideoCompleted(prev => ({
+                  ...prev,
+                  [stepIndex]: true
+                }));
+              } else {
+                // If video ended but user hasn't watched 80%, don't mark as completed
+                console.log(`Video ended but only watched ${currentProgress}%, need 80% to complete`);
+              }
             }
           },
           onReady: () => {
@@ -244,12 +258,13 @@ const TrailViewer: React.FC<TrailViewerProps> = ({ trail }) => {
 
                       <CardContent className="relative z-20">
                         {step.type === 'video' && step.source && (
-                          <div className="mb-4 mt-4">
+                          <div className="mb-4 mt-4 relative">
                             <AspectRatio ratio={16 / 9} className="bg-gray-100 rounded-md overflow-hidden">
                               <div 
                                 id={`youtube-player-${index}`}
                                 className="w-full h-full"
                               />
+
                             </AspectRatio>
                           </div>
                         )}

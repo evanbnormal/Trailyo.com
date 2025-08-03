@@ -21,13 +21,26 @@ export const SavedTrailCard: React.FC<{ trail: any; onClick?: () => void; onDele
     <Card className="overflow-hidden hover:shadow-lg transition-shadow duration-300 cursor-pointer" onClick={onClick}>
       <div className="flex flex-col h-full">
         {/* Thumbnail */}
-        {trail.thumbnailUrl && (
-          <img 
-            src={trail.thumbnailUrl} 
-            alt={trail.title}
-            className="w-full aspect-video object-cover"
-          />
-        )}
+        <div className="relative">
+          {trail.thumbnailUrl && (
+            <img 
+              src={trail.thumbnailUrl} 
+              alt={trail.title}
+              className="w-full aspect-video object-cover"
+            />
+          )}
+          {/* Delete button - top right */}
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              if (onDelete) onDelete();
+            }}
+            className="absolute top-3 right-3 w-8 h-8 bg-white/90 hover:bg-white text-gray-700 rounded-md flex items-center justify-center transition-colors duration-200 shadow-lg"
+            title="Delete trail"
+          >
+            <Trash2 className="w-4 h-4" />
+          </button>
+        </div>
         <div className="pl-5 pr-6 pt-3 pb-6 flex flex-col gap-2 flex-1">
           <h3 className="text-xl font-bold text-gray-900 truncate">{trail.title}</h3>
           <p className="text-gray-600 text-sm line-clamp-2">{trail.description}</p>

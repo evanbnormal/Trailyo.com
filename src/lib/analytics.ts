@@ -9,10 +9,11 @@ export interface AnalyticsEvent {
 
 export interface TrailAnalytics {
   trailId: string;
-  totalLearners: number;
+  totalLearners: number; // Total visits/interactions (each visit counts as a learner)
   totalRevenue: number;
   totalTips: number;
   completionRate: number;
+  completionRateOverTime: Array<{ date: string; completionRate: number }>;
   totalWatchTime: number; // in minutes
   stepRetention: Array<{
     stepIndex: number;
@@ -32,6 +33,12 @@ export interface TrailAnalytics {
     skipRevenue: number;
     tipRevenue: number;
   }>;
+  revenueOverTime: Array<{ date: string; revenue: number }>;
+  tipsOverTime: Array<{ date: string; amount: number }>;
+  tipProportion: number;
+  usersWhoTipped: number;
+  watchTimeOverTime: Array<{ date: string; watchTime: number }>;
+  learnersOverTime: Array<{ date: string; learners: number }>;
   events: AnalyticsEvent[];
 }
 
@@ -48,7 +55,14 @@ class AnalyticsService {
 
   // Track when someone views a trail
   async trackTrailView(trailId: string, trailTitle: string): Promise<void> {
-    await this.recordEvent(trailId, 'trail_view', { trailTitle });
+    // Generate a unique session ID that includes timestamp to ensure uniqueness
+    const sessionId = `session_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+    console.log('🔍 Tracking trail view:', { trailId, trailTitle, sessionId });
+    await this.recordEvent(trailId, 'trail_view', { 
+      trailTitle,
+      timestamp: Date.now(),
+      sessionId: sessionId // Generate unique session ID for each visit
+    });
   }
 
   // Track when someone completes a step
@@ -101,10 +115,29 @@ class AnalyticsService {
     }
   }
 
+  // Reset all analytics data
+  async resetAnalytics(): Promise<void> {
+    try {
+      const response = await fetch('/api/analytics', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ action: 'reset' }),
+      });
+      if (response.ok) {
+        console.log('Analytics reset successfully');
+      }
+    } catch (error) {
+      console.error('Error resetting analytics:', error);
+    }
+  }
+
   // Private method for recording events
   private async recordEvent(trailId: string, eventType: AnalyticsEvent['eventType'], data: any): Promise<void> {
     try {
-      await fetch('/api/analytics', {
+      console.log('📤 Sending analytics event to API:', { trailId, eventType, data });
+      const response = await fetch('/api/analytics', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -115,8 +148,16 @@ class AnalyticsService {
           data
         }),
       });
+      
+      if (!response.ok) {
+        console.error('❌ Analytics API error:', response.status, response.statusText);
+        const errorText = await response.text();
+        console.error('❌ Error details:', errorText);
+      } else {
+        console.log('✅ Analytics event sent successfully');
+      }
     } catch (error) {
-      console.error('Error recording analytics event:', error);
+      console.error('❌ Error recording analytics event:', error);
     }
   }
 
@@ -130,6 +171,11 @@ class AnalyticsService {
   async clearAllAnalytics(): Promise<void> {
     // This would need to be implemented in the API
     console.log('Clear all analytics not implemented yet');
+  }
+
+  // Generate a unique session ID for tracking
+  private generateSessionId(): string {
+    return `session_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
   }
 }
 

@@ -9,6 +9,7 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 import { StripePayment } from './StripePayment';
+import { analyticsService } from '@/lib/analytics';
 
 interface TipPaymentModalProps {
   isOpen: boolean;
@@ -39,6 +40,10 @@ export const TipPaymentModal: React.FC<TipPaymentModalProps> = ({
 
   const handleSuccess = () => {
     console.log('🎁 Tip payment successful!');
+    
+    // Track tip donation analytics
+    analyticsService.trackTipDonated(trailId, amount);
+    
     onSuccess();
     onClose();
   };

@@ -9,40 +9,14 @@ import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContai
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { Select, SelectTrigger, SelectContent, SelectItem, SelectValue } from "@/components/ui/select";
 import { analyticsService, TrailAnalytics as RealTrailAnalytics } from '@/lib/analytics';
-
-interface TrailStep {
-  id: string;
-  title: string;
-  content: string;
-  type: 'video' | 'reward';
-  source: string;
-  thumbnailUrl?: string;
-  isSaved?: boolean;
-  duration?: number;
-}
-
-interface Trail {
-  id: string;
-  title: string;
-  description: string;
-  status: 'published' | 'draft';
-  createdAt: string;
-  views: number;
-  earnings: number;
-  steps: TrailStep[];
-  thumbnailUrl?: string;
-  shareableLink?: string;
-  suggestedInvestment?: number;
-  trailValue?: number;
-  trailCurrency?: string;
-  creator?: string;
-}
+import { Trail, TrailStep } from '@/lib/data';
 
 interface AnalyticsData {
   revenue: number;
   tips: number;
-  totalLearners: number;
+  totalLearners: number; // Single number, not broken down by step
   completionRate: number;
+  completionRateOverTime: Array<{ date: string; completionRate: number }>; // Completion rate over time
   dropOffData: Array<{
     step: number;
     stepTitle: string;
@@ -68,6 +42,147 @@ interface AnalyticsData {
 
 type ActiveMetric = 'revenue' | 'tips' | 'learners' | 'completion' | 'dropoff' | 'watchtime';
 
+// Helper function to get ordinal suffix
+function getOrdinalSuffix(day: number): string {
+  if (day > 3 && day < 21) return 'th';
+  switch (day % 10) {
+    case 1: return 'st';
+    case 2: return 'nd';
+    case 3: return 'rd';
+    default: return 'th';
+  }
+}
+
+// Helper functions to generate time-based analytics from real events
+function generateRevenueOverTime(events: any[]): Array<{ date: string; revenue: number }> {
+  const revenueEvents = events.filter(e => e.eventType === 'step_skip' || e.eventType === 'tip_donated');
+  const monthlyRevenue = new Map<string, number>();
+  
+  revenueEvents.forEach(event => {
+    const date = new Date(event.timestamp);
+    const monthKey = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
+    const amount = event.data.skipCost || event.data.tipAmount || 0;
+    monthlyRevenue.set(monthKey, (monthlyRevenue.get(monthKey) || 0) + amount);
+  });
+  
+  // Generate data for all months in the current year (2024)
+  const currentYear = '2024';
+  const allMonths = [];
+  for (let month = 1; month <= 12; month++) {
+    const monthKey = `${currentYear}-${String(month).padStart(2, '0')}`;
+    allMonths.push({
+      date: monthKey,
+      revenue: monthlyRevenue.get(monthKey) || 0
+    });
+  }
+  
+  return allMonths;
+}
+
+function generateRevenueByWeek(events: any[]): Array<{ week: string; revenue: number; month: string }> {
+  const revenueEvents = events.filter(e => e.eventType === 'step_skip' || e.eventType === 'tip_donated');
+  const weeklyRevenue = new Map<string, { revenue: number; month: string }>();
+  
+  revenueEvents.forEach(event => {
+    const date = new Date(event.timestamp);
+    const weekKey = `WEEK ${Math.ceil(date.getDate() / 7)}`;
+    const monthKey = date.toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
+    const amount = event.data.skipCost || event.data.tipAmount || 0;
+    
+    if (!weeklyRevenue.has(weekKey)) {
+      weeklyRevenue.set(weekKey, { revenue: 0, month: monthKey });
+    }
+    weeklyRevenue.get(weekKey)!.revenue += amount;
+  });
+  
+  return Array.from(weeklyRevenue.entries())
+    .map(([week, data]) => ({ week, ...data }));
+}
+
+function generateRevenueByDay(events: any[]): Array<{ day: string; revenue: number; weekDate: string }> {
+  const revenueEvents = events.filter(e => e.eventType === 'step_skip' || e.eventType === 'tip_donated');
+  const dailyRevenue = new Map<string, { revenue: number; weekDate: string }>();
+  
+  revenueEvents.forEach(event => {
+    const date = new Date(event.timestamp);
+    const dayKey = date.toLocaleDateString('en-US', { weekday: 'long' });
+    const weekDate = date.toLocaleDateString('en-US', { weekday: 'long', day: 'numeric' });
+    const amount = event.data.skipCost || event.data.tipAmount || 0;
+    
+    if (!dailyRevenue.has(dayKey)) {
+      dailyRevenue.set(dayKey, { revenue: 0, weekDate });
+    }
+    dailyRevenue.get(dayKey)!.revenue += amount;
+  });
+  
+  // Generate data for all days of the week
+  const daysOfWeek = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+  return daysOfWeek.map(day => ({
+    day,
+    revenue: dailyRevenue.get(day)?.revenue || 0,
+    weekDate: dailyRevenue.get(day)?.weekDate || day
+  }));
+}
+
+function generateDropOffOverTime(events: any[]): Array<{ date: string; dropOff: number }> {
+  const trailViews = events.filter(e => e.eventType === 'trail_view');
+  const monthlyDropOff = new Map<string, number>();
+  
+  trailViews.forEach(event => {
+    const date = new Date(event.timestamp);
+    const monthKey = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
+    monthlyDropOff.set(monthKey, (monthlyDropOff.get(monthKey) || 0) + 1);
+  });
+  
+  return Array.from(monthlyDropOff.entries())
+    .sort(([a], [b]) => a.localeCompare(b))
+    .map(([date, dropOff]) => ({ date, dropOff }));
+}
+
+function generateDropOffByTime(events: any[], totalLearners: number): Array<{ time: string; learners: number }> {
+  const stepCompletions = events.filter(e => e.eventType === 'step_complete');
+  const timeIntervals = [0, 5, 10, 15, 20, 25, 30, 35, 40];
+  const dropOffData = [];
+  
+  for (let i = 0; i < timeIntervals.length; i++) {
+    const time = timeIntervals[i];
+    const learners = i === 0 ? totalLearners : Math.round(totalLearners * (1 - (i * 0.15)));
+    dropOffData.push({ time: `${time} min`, learners });
+  }
+  
+  return dropOffData;
+}
+
+function generateWatchTimeByTime(events: any[], totalWatchTime: number): Array<{ time: string; watchTime: number }> {
+  const videoWatches = events.filter(e => e.eventType === 'video_watch');
+  const timeIntervals = [0, 5, 10, 15, 20, 25, 30, 35, 40];
+  const watchTimeData = [];
+  
+  for (let i = 0; i < timeIntervals.length; i++) {
+    const time = timeIntervals[i];
+    const watchTime = i === 0 ? 0 : Math.round(totalWatchTime * (i * 0.1));
+    watchTimeData.push({ time: `${time} min`, watchTime });
+  }
+  
+  return watchTimeData;
+}
+
+function generateWatchTimeOverTime(events: any[]): Array<{ date: string; watchTime: number }> {
+  const videoWatches = events.filter(e => e.eventType === 'video_watch');
+  const monthlyWatchTime = new Map<string, number>();
+  
+  videoWatches.forEach(event => {
+    const date = new Date(event.timestamp);
+    const monthKey = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
+    const watchTime = event.data.watchTime || 0;
+    monthlyWatchTime.set(monthKey, (monthlyWatchTime.get(monthKey) || 0) + watchTime);
+  });
+  
+  return Array.from(monthlyWatchTime.entries())
+    .sort(([a], [b]) => a.localeCompare(b))
+    .map(([date, watchTime]) => ({ date, watchTime }));
+}
+
 const TrailAnalytics: React.FC = () => {
   const { trailId } = useParams<{ trailId: string }>();
   const navigate = useNavigate();
@@ -75,19 +190,20 @@ const TrailAnalytics: React.FC = () => {
   
   const [trail, setTrail] = useState<Trail | null>(null);
   const [analytics, setAnalytics] = useState<AnalyticsData | null>(null);
+  const [realAnalytics, setRealAnalytics] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [activeMetric, setActiveMetric] = useState<ActiveMetric>('revenue');
   const [isMobile, setIsMobile] = useState(false);
   const [watchTimeToggle, setWatchTimeToggle] = useState<'total' | 'perStep' | 'overTime'>('total');
-  const [revenueTimeToggle, setRevenueTimeToggle] = useState<'day' | 'week' | 'month'>('month');
-  const [revenueViewToggle, setRevenueViewToggle] = useState<'time' | 'step'>('time');
+  const [revenueTimeToggle, setRevenueTimeToggle] = useState<'all' | 'day' | 'week' | 'month'>('month');
+  const [revenueViewToggle, setRevenueViewToggle] = useState<'total' | 'skip' | 'tips'>('total');
   const [tipsToggle, setTipsToggle] = useState<'proportion' | 'overtime'>('proportion');
   const [tipsTimeToggle, setTipsTimeToggle] = useState<'day' | 'week' | 'month'>('month');
   const [dropoffToggle, setDropoffToggle] = useState<'step' | 'time'>('step');
   const [learnersToggle, setLearnersToggle] = useState<'total' | 'step'>('total');
-  const [selectedYear, setSelectedYear] = useState('2024');
-  const [selectedMonth, setSelectedMonth] = useState('12');
+  const [selectedYear, setSelectedYear] = useState(new Date().getFullYear().toString());
+  const [selectedMonth, setSelectedMonth] = useState(String(new Date().getMonth() + 1).padStart(2, '0'));
   const [selectedWeek, setSelectedWeek] = useState('WEEK 1');
 
   // Check screen size for responsive behavior
@@ -122,17 +238,30 @@ const TrailAnalytics: React.FC = () => {
           setTrail(foundTrail);
           
           // Load real analytics data
-          const realAnalytics = await analyticsService.getTrailAnalytics(trailId);
+          const realAnalyticsData = await analyticsService.getTrailAnalytics(trailId);
           
-          if (realAnalytics) {
-          // Convert real analytics to the expected format
-          const analyticsData: AnalyticsData = {
-            revenue: realAnalytics.totalRevenue,
-            tips: realAnalytics.totalTips,
-            totalLearners: realAnalytics.totalLearners,
-            completionRate: realAnalytics.completionRate,
+          console.log('Loaded analytics data:', realAnalyticsData);
+          console.log('Analytics breakdown:', {
+            totalLearners: realAnalyticsData?.totalLearners,
+            totalRevenue: realAnalyticsData?.totalRevenue,
+            totalTips: realAnalyticsData?.totalTips,
+            completionRate: realAnalyticsData?.completionRate,
+            revenueByStep: realAnalyticsData?.revenueByStep,
+            tipsOverTime: realAnalyticsData?.tipsOverTime,
+            events: realAnalyticsData?.events?.length
+          });
+          
+          if (realAnalyticsData) {
+            setRealAnalytics(realAnalyticsData);
+            // Convert real analytics to the expected format
+            const analyticsData: AnalyticsData = {
+            revenue: realAnalyticsData.totalRevenue,
+            tips: realAnalyticsData.totalTips,
+            totalLearners: realAnalyticsData.totalLearners,
+            completionRate: realAnalyticsData.completionRate,
+            completionRateOverTime: realAnalyticsData.completionRateOverTime || [],
             dropOffData: foundTrail.steps.map((step, index) => {
-              const stepRetention = realAnalytics.stepRetention.find(s => s.stepIndex === index);
+              const stepRetention = realAnalyticsData.stepRetention.find(s => s.stepIndex === index);
               return {
                 step: index + 1,
                 stepTitle: step.title,
@@ -141,107 +270,29 @@ const TrailAnalytics: React.FC = () => {
                 retentionRate: stepRetention?.retentionRate || 0
               };
             }),
-            revenueOverTime: [
-              { date: '2024-01', revenue: 0 },
-              { date: '2024-02', revenue: Math.round(realAnalytics.totalRevenue * 0.1) },
-              { date: '2024-03', revenue: Math.round(realAnalytics.totalRevenue * 0.2) },
-              { date: '2024-04', revenue: Math.round(realAnalytics.totalRevenue * 0.3) },
-              { date: '2024-05', revenue: Math.round(realAnalytics.totalRevenue * 0.4) },
-              { date: '2024-06', revenue: Math.round(realAnalytics.totalRevenue * 0.5) },
-              { date: '2024-07', revenue: Math.round(realAnalytics.totalRevenue * 0.6) },
-              { date: '2024-08', revenue: Math.round(realAnalytics.totalRevenue * 0.7) },
-              { date: '2024-09', revenue: Math.round(realAnalytics.totalRevenue * 0.8) },
-              { date: '2024-10', revenue: Math.round(realAnalytics.totalRevenue * 0.9) },
-              { date: '2024-11', revenue: Math.round(realAnalytics.totalRevenue * 0.95) },
-              { date: '2024-12', revenue: realAnalytics.totalRevenue }
-            ],
-            revenueByWeek: [
-              { week: 'WEEK 1', revenue: Math.round(realAnalytics.totalRevenue * 0.25), month: 'December 2024' },
-              { week: 'WEEK 2', revenue: Math.round(realAnalytics.totalRevenue * 0.25), month: 'December 2024' },
-              { week: 'WEEK 3', revenue: Math.round(realAnalytics.totalRevenue * 0.25), month: 'December 2024' },
-              { week: 'WEEK 4', revenue: Math.round(realAnalytics.totalRevenue * 0.25), month: 'December 2024' }
-            ],
-            revenueByDay: [
-              { day: 'Monday', revenue: Math.round(realAnalytics.totalRevenue * 0.14), weekDate: 'Monday 7th' },
-              { day: 'Tuesday', revenue: Math.round(realAnalytics.totalRevenue * 0.14), weekDate: 'Monday 7th' },
-              { day: 'Wednesday', revenue: Math.round(realAnalytics.totalRevenue * 0.14), weekDate: 'Monday 7th' },
-              { day: 'Thursday', revenue: Math.round(realAnalytics.totalRevenue * 0.14), weekDate: 'Monday 7th' },
-              { day: 'Friday', revenue: Math.round(realAnalytics.totalRevenue * 0.14), weekDate: 'Monday 7th' },
-              { day: 'Saturday', revenue: Math.round(realAnalytics.totalRevenue * 0.15), weekDate: 'Monday 7th' },
-              { day: 'Sunday', revenue: Math.round(realAnalytics.totalRevenue * 0.15), weekDate: 'Monday 7th' }
-            ],
-            totalWatchTime: realAnalytics.totalWatchTime,
+            revenueOverTime: realAnalyticsData.revenueOverTime || [],
+            revenueByWeek: generateRevenueByWeek(realAnalyticsData.events),
+            revenueByDay: generateRevenueByDay(realAnalyticsData.events),
+            totalWatchTime: realAnalyticsData.totalWatchTime,
             watchTimePerStep: foundTrail.steps.map((step, idx) => {
-              const videoWatchTime = realAnalytics.videoWatchTime.find(s => s.stepIndex === idx);
+              const videoWatchTime = realAnalyticsData.videoWatchTime.find(s => s.stepIndex === idx);
               return {
                 stepTitle: step.title,
                 watchTime: videoWatchTime?.totalWatchTime || 0
               };
             }),
             revenueByStep: foundTrail.steps.map((step, idx) => {
-              const revenueByStep = realAnalytics.revenueByStep.find(s => s.stepIndex === idx);
+              const revenueByStep = realAnalyticsData.revenueByStep.find(s => s.stepIndex === idx);
               return {
                 stepTitle: step.title,
                 revenue: (revenueByStep?.skipRevenue || 0) + (revenueByStep?.tipRevenue || 0)
               };
             }),
-            learnersByStep: foundTrail.steps.map((step, idx) => {
-              const stepRetention = realAnalytics.stepRetention.find(s => s.stepIndex === idx);
-              return {
-                stepTitle: step.title,
-                learners: stepRetention?.learnersReached || 0
-              };
-            }),
-            dropOffOverTime: [
-              { date: '2024-01', dropOff: 15 },
-              { date: '2024-02', dropOff: 18 },
-              { date: '2024-03', dropOff: 22 },
-              { date: '2024-04', dropOff: 25 },
-              { date: '2024-05', dropOff: 28 },
-              { date: '2024-06', dropOff: 30 },
-              { date: '2024-07', dropOff: 32 },
-              { date: '2024-08', dropOff: 35 },
-              { date: '2024-09', dropOff: 38 },
-              { date: '2024-10', dropOff: 40 },
-              { date: '2024-11', dropOff: 42 },
-              { date: '2024-12', dropOff: 45 }
-            ],
-            dropOffByTime: [
-              { time: '0 min', learners: realAnalytics.totalLearners },
-              { time: '5 min', learners: Math.round(realAnalytics.totalLearners * 0.85) },
-              { time: '10 min', learners: Math.round(realAnalytics.totalLearners * 0.72) },
-              { time: '15 min', learners: Math.round(realAnalytics.totalLearners * 0.58) },
-              { time: '20 min', learners: Math.round(realAnalytics.totalLearners * 0.45) },
-              { time: '25 min', learners: Math.round(realAnalytics.totalLearners * 0.32) },
-              { time: '30 min', learners: Math.round(realAnalytics.totalLearners * 0.28) },
-              { time: '35 min', learners: Math.round(realAnalytics.totalLearners * 0.25) },
-              { time: '40 min', learners: Math.round(realAnalytics.totalLearners * 0.22) }
-            ],
-            watchTimeByTime: [
-              { time: '0 min', watchTime: 0 },
-              { time: '5 min', watchTime: Math.round(realAnalytics.totalWatchTime * 0.1) },
-              { time: '10 min', watchTime: Math.round(realAnalytics.totalWatchTime * 0.2) },
-              { time: '15 min', watchTime: Math.round(realAnalytics.totalWatchTime * 0.3) },
-              { time: '20 min', watchTime: Math.round(realAnalytics.totalWatchTime * 0.4) },
-              { time: '25 min', watchTime: Math.round(realAnalytics.totalWatchTime * 0.5) },
-              { time: '30 min', watchTime: Math.round(realAnalytics.totalWatchTime * 0.6) },
-              { time: '35 min', watchTime: Math.round(realAnalytics.totalWatchTime * 0.7) },
-              { time: '40 min', watchTime: Math.round(realAnalytics.totalWatchTime * 0.8) }
-            ],
-            watchTimeOverTime: [
-              { date: '2024-01', watchTime: 0 },
-              { date: '2024-02', watchTime: Math.round(realAnalytics.totalWatchTime * 0.1) },
-              { date: '2024-03', watchTime: Math.round(realAnalytics.totalWatchTime * 0.2) },
-              { date: '2024-04', watchTime: Math.round(realAnalytics.totalWatchTime * 0.3) },
-              { date: '2024-05', watchTime: Math.round(realAnalytics.totalWatchTime * 0.4) },
-              { date: '2024-06', watchTime: Math.round(realAnalytics.totalWatchTime * 0.5) },
-              { date: '2024-07', watchTime: Math.round(realAnalytics.totalWatchTime * 0.6) },
-              { date: '2024-08', watchTime: Math.round(realAnalytics.totalWatchTime * 0.7) },
-              { date: '2024-09', watchTime: Math.round(realAnalytics.totalWatchTime * 0.8) },
-              { date: '2024-10', watchTime: Math.round(realAnalytics.totalWatchTime * 0.9) },
-              { date: '2024-11', watchTime: Math.round(realAnalytics.totalWatchTime * 0.95) },
-              { date: '2024-12', watchTime: realAnalytics.totalWatchTime }
-            ],
+            learnersByStep: [], // Total learners is not broken down by step
+            dropOffOverTime: generateDropOffOverTime(realAnalyticsData.events),
+            dropOffByTime: generateDropOffByTime(realAnalyticsData.events, realAnalyticsData.totalLearners),
+            watchTimeByTime: generateWatchTimeByTime(realAnalyticsData.events, realAnalyticsData.totalWatchTime),
+            watchTimeOverTime: generateWatchTimeOverTime(realAnalyticsData.events),
           };
           
           setAnalytics(analyticsData);
@@ -252,6 +303,7 @@ const TrailAnalytics: React.FC = () => {
             tips: 0,
             totalLearners: 0,
             completionRate: 0,
+            completionRateOverTime: [],
             dropOffData: foundTrail.steps.map((step, index) => ({
               step: index + 1,
               stepTitle: step.title,
@@ -271,10 +323,7 @@ const TrailAnalytics: React.FC = () => {
               stepTitle: step.title,
               revenue: 0
             })),
-            learnersByStep: foundTrail.steps.map(step => ({
-              stepTitle: step.title,
-              learners: 0
-            })),
+            learnersByStep: [], // Total learners is not broken down by step
             dropOffOverTime: [],
             dropOffByTime: [],
             watchTimeByTime: [],
@@ -285,6 +334,7 @@ const TrailAnalytics: React.FC = () => {
         
         setLoading(false);
       } else {
+        // Trail not found, navigate to profile
         navigate('/profile');
       }
     } catch (error) {
@@ -295,6 +345,73 @@ const TrailAnalytics: React.FC = () => {
 
   loadTrailAndAnalytics();
 }, [trailId, getUserTrails, navigate]);
+
+  const handleResetAnalytics = async () => {
+    try {
+      await analyticsService.resetAnalytics();
+      // Reload the page to refresh analytics
+      window.location.reload();
+    } catch (error) {
+      console.error('Error resetting analytics:', error);
+    }
+  };
+
+  const handleRefreshAnalytics = async () => {
+    try {
+      setLoading(true);
+      // Reload analytics data
+      const realAnalyticsData = await analyticsService.getTrailAnalytics(trailId!);
+      if (realAnalyticsData && trail) {
+        setRealAnalytics(realAnalyticsData);
+        // Convert real analytics to the expected format
+        const analyticsData: AnalyticsData = {
+          revenue: realAnalyticsData.totalRevenue,
+          tips: realAnalyticsData.totalTips,
+          totalLearners: realAnalyticsData.totalLearners,
+          completionRate: realAnalyticsData.completionRate,
+          completionRateOverTime: realAnalyticsData.completionRateOverTime || [],
+          dropOffData: trail.steps.map((step, index) => {
+            const stepRetention = realAnalyticsData.stepRetention.find(s => s.stepIndex === index);
+            return {
+              step: index + 1,
+              stepTitle: step.title,
+              learnersReached: stepRetention?.learnersReached || 0,
+              learnersCompleted: stepRetention?.learnersReached || 0,
+              retentionRate: stepRetention?.retentionRate || 0
+            };
+          }),
+          revenueOverTime: generateRevenueOverTime(realAnalyticsData.events),
+          revenueByWeek: generateRevenueByWeek(realAnalyticsData.events),
+          revenueByDay: generateRevenueByDay(realAnalyticsData.events),
+          totalWatchTime: realAnalyticsData.totalWatchTime,
+          watchTimePerStep: trail.steps.map((step, idx) => {
+            const videoWatchTime = realAnalyticsData.videoWatchTime.find(s => s.stepIndex === idx);
+            return {
+              stepTitle: step.title,
+              watchTime: videoWatchTime?.totalWatchTime || 0
+            };
+          }),
+          revenueByStep: trail.steps.map((step, idx) => {
+            const revenueByStep = realAnalyticsData.revenueByStep.find(s => s.stepIndex === idx);
+            return {
+              stepTitle: step.title,
+              revenue: (revenueByStep?.skipRevenue || 0) + (revenueByStep?.tipRevenue || 0)
+            };
+          }),
+          learnersByStep: [],
+          dropOffOverTime: generateDropOffOverTime(realAnalyticsData.events),
+          dropOffByTime: generateDropOffByTime(realAnalyticsData.events, realAnalyticsData.totalLearners),
+          watchTimeByTime: generateWatchTimeByTime(realAnalyticsData.events, realAnalyticsData.totalWatchTime),
+          watchTimeOverTime: generateWatchTimeOverTime(realAnalyticsData.events),
+        };
+        setAnalytics(analyticsData);
+      }
+    } catch (error) {
+      console.error('Error refreshing analytics:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const getTrailThumbnail = (trail: Trail) => {
     // Use custom thumbnail if set, otherwise use reward step's thumbnail
@@ -320,27 +437,31 @@ const TrailAnalytics: React.FC = () => {
               <div>
                 <CardTitle className="flex items-center gap-2 mb-4">
                   <DollarSign className="h-5 w-5 text-green-600" />
-                  Revenue Over Time
+                  Trail Revenue Analytics
                 </CardTitle>
+                <p className="text-sm text-gray-600 mb-2">
+                  Total revenue from skip step payments and tip payments
+                </p>
                 <div className="flex gap-2 items-center">
                   <ToggleGroup
                     type="single"
                     value={revenueViewToggle}
-                    onValueChange={v => v && setRevenueViewToggle(v as 'time' | 'step')}
+                    onValueChange={v => v && setRevenueViewToggle(v as 'total' | 'skip' | 'tips')}
                     className="rounded-md bg-white border border-gray-200 flex gap-1 transition-all duration-300 h-9 items-center box-border p-1"
                   >
-                    <ToggleGroupItem value="time" className="rounded-md px-4 h-7 min-h-0 py-0 flex items-center justify-center font-semibold text-sm box-border transition-all duration-300 data-[state=on]:bg-black data-[state=on]:text-white data-[state=off]:bg-white data-[state=off]:text-black">Over Time</ToggleGroupItem>
-                    <ToggleGroupItem value="step" className="rounded-md px-4 h-7 min-h-0 py-0 flex items-center justify-center font-semibold text-sm box-border transition-all duration-300 data-[state=on]:bg-black data-[state=on]:text-white data-[state=off]:bg-white data-[state=off]:text-black">By Step</ToggleGroupItem>
+                    <ToggleGroupItem value="total" className="rounded-md px-4 h-7 min-h-0 py-0 flex items-center justify-center font-semibold text-sm box-border transition-all duration-300 data-[state=on]:bg-black data-[state=on]:text-white data-[state=off]:bg-white data-[state=off]:text-black">Total</ToggleGroupItem>
+                    <ToggleGroupItem value="skip" className="rounded-md px-4 h-7 min-h-0 py-0 flex items-center justify-center font-semibold text-sm box-border transition-all duration-300 data-[state=on]:bg-black data-[state=on]:text-white data-[state=off]:bg-white data-[state=off]:text-black">Skipped</ToggleGroupItem>
+                    <ToggleGroupItem value="tips" className="rounded-md px-4 h-7 min-h-0 py-0 flex items-center justify-center font-semibold text-sm box-border transition-all duration-300 data-[state=on]:bg-black data-[state=on]:text-white data-[state=off]:bg-white data-[state=off]:text-black">Tips</ToggleGroupItem>
                   </ToggleGroup>
-                  <div className={`flex gap-2 transition-all duration-300 ${revenueViewToggle === 'step' ? 'opacity-0 scale-95 pointer-events-none absolute' : 'opacity-100 scale-100 relative'}`}> 
+                  <div className="flex gap-2"> 
                     <Button size="sm" variant={revenueTimeToggle === 'day' ? 'default' : 'outline'} onClick={() => setRevenueTimeToggle('day')}>Days</Button>
                     <Button size="sm" variant={revenueTimeToggle === 'week' ? 'default' : 'outline'} onClick={() => setRevenueTimeToggle('week')}>Weeks</Button>
                     <Button size="sm" variant={revenueTimeToggle === 'month' ? 'default' : 'outline'} onClick={() => setRevenueTimeToggle('month')}>Months</Button>
                   </div>
                 </div>
               </div>
-              {/* Period Selector Dropdown */}
-              <div className="text-lg font-semibold text-gray-900 pt-1 min-w-[120px]">
+              {/* Period Selector Dropdowns */}
+              <div className="flex gap-2 items-center">
                 {revenueTimeToggle === 'month' && (
                   <Select value={selectedYear} onValueChange={setSelectedYear}>
                     <SelectTrigger className="w-[120px]">
@@ -355,125 +476,286 @@ const TrailAnalytics: React.FC = () => {
                   </Select>
                 )}
                 {revenueTimeToggle === 'week' && (
-                  <Select value={selectedMonth} onValueChange={setSelectedMonth}>
-                    <SelectTrigger className="w-[120px]">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="01">Jan</SelectItem>
-                      <SelectItem value="02">Feb</SelectItem>
-                      <SelectItem value="03">Mar</SelectItem>
-                      <SelectItem value="04">Apr</SelectItem>
-                      <SelectItem value="05">May</SelectItem>
-                      <SelectItem value="06">Jun</SelectItem>
-                      <SelectItem value="07">Jul</SelectItem>
-                      <SelectItem value="08">Aug</SelectItem>
-                      <SelectItem value="09">Sep</SelectItem>
-                      <SelectItem value="10">Oct</SelectItem>
-                      <SelectItem value="11">Nov</SelectItem>
-                      <SelectItem value="12">Dec</SelectItem>
-                    </SelectContent>
-                  </Select>
+                  <>
+                    <Select value={selectedYear} onValueChange={setSelectedYear}>
+                      <SelectTrigger className="w-[100px]">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="2022">2022</SelectItem>
+                        <SelectItem value="2023">2023</SelectItem>
+                        <SelectItem value="2024">2024</SelectItem>
+                        <SelectItem value="2025">2025</SelectItem>
+                      </SelectContent>
+                    </Select>
+                    <Select value={selectedMonth} onValueChange={setSelectedMonth}>
+                      <SelectTrigger className="w-[100px]">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="01">Jan</SelectItem>
+                        <SelectItem value="02">Feb</SelectItem>
+                        <SelectItem value="03">Mar</SelectItem>
+                        <SelectItem value="04">Apr</SelectItem>
+                        <SelectItem value="05">May</SelectItem>
+                        <SelectItem value="06">Jun</SelectItem>
+                        <SelectItem value="07">Jul</SelectItem>
+                        <SelectItem value="08">Aug</SelectItem>
+                        <SelectItem value="09">Sep</SelectItem>
+                        <SelectItem value="10">Oct</SelectItem>
+                        <SelectItem value="11">Nov</SelectItem>
+                        <SelectItem value="12">Dec</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </>
                 )}
                 {revenueTimeToggle === 'day' && (
-                  <Select value={selectedWeek} onValueChange={setSelectedWeek}>
-                    <SelectTrigger className="w-[120px]">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="WEEK 1">Week 1</SelectItem>
-                      <SelectItem value="WEEK 2">Week 2</SelectItem>
-                      <SelectItem value="WEEK 3">Week 3</SelectItem>
-                      <SelectItem value="WEEK 4">Week 4</SelectItem>
-                    </SelectContent>
-                  </Select>
+                  <div className="flex flex-col gap-2">
+                    <div className="flex gap-2">
+                      <Select value={selectedYear} onValueChange={setSelectedYear}>
+                        <SelectTrigger className="w-[100px]">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="2022">2022</SelectItem>
+                          <SelectItem value="2023">2023</SelectItem>
+                          <SelectItem value="2024">2024</SelectItem>
+                          <SelectItem value="2025">2025</SelectItem>
+                        </SelectContent>
+                      </Select>
+                      <Select value={selectedMonth} onValueChange={setSelectedMonth}>
+                        <SelectTrigger className="w-[100px]">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="01">Jan</SelectItem>
+                          <SelectItem value="02">Feb</SelectItem>
+                          <SelectItem value="03">Mar</SelectItem>
+                          <SelectItem value="04">Apr</SelectItem>
+                          <SelectItem value="05">May</SelectItem>
+                          <SelectItem value="06">Jun</SelectItem>
+                          <SelectItem value="07">Jul</SelectItem>
+                          <SelectItem value="08">Aug</SelectItem>
+                          <SelectItem value="09">Sep</SelectItem>
+                          <SelectItem value="10">Oct</SelectItem>
+                          <SelectItem value="11">Nov</SelectItem>
+                          <SelectItem value="12">Dec</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div className="flex justify-end">
+                      <Select value={selectedWeek} onValueChange={setSelectedWeek}>
+                        <SelectTrigger className="w-[100px]">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {(() => {
+                            const selectedYearNum = parseInt(selectedYear);
+                            const selectedMonthNum = parseInt(selectedMonth);
+                            const weeks = [];
+                            
+                            for (let week = 1; week <= 4; week++) {
+                              // Calculate the Monday date for each week
+                              const firstDayOfMonth = new Date(selectedYearNum, selectedMonthNum - 1, 1);
+                              const firstMonday = new Date(firstDayOfMonth);
+                              const dayOfWeek = firstDayOfMonth.getDay();
+                              const daysToAdd = dayOfWeek === 0 ? 1 : (8 - dayOfWeek);
+                              firstMonday.setDate(firstDayOfMonth.getDate() + daysToAdd);
+                              
+                              // Add weeks to get to the current week
+                              const mondayDate = new Date(firstMonday);
+                              mondayDate.setDate(firstMonday.getDate() + (week - 1) * 7);
+                              
+                              const weekKey = `WEEK ${week}`;
+                              const day = mondayDate.getDate();
+                              const ordinal = getOrdinalSuffix(day);
+                              const weekLabel = `${day}${ordinal}`;
+                              weeks.push({ key: weekKey, label: weekLabel });
+                            }
+                            
+                            return weeks.map(({ key, label }) => (
+                              <SelectItem key={key} value={key}>
+                                {label}
+                              </SelectItem>
+                            ));
+                          })()}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  </div>
                 )}
               </div>
             </CardHeader>
+            {/* Revenue Summary */}
+            <div className="px-6 py-4 bg-white">
+              <div className="text-center">
+                {revenueViewToggle === 'total' && (
+                  <>
+                    <div className="text-2xl font-bold text-green-600">
+                      ${realAnalytics?.totalRevenue?.toFixed(2) || '0.00'}
+                    </div>
+                    <div className="text-sm text-gray-600">Total Revenue</div>
+                  </>
+                )}
+                {revenueViewToggle === 'skip' && (
+                  <>
+                    <div className="text-2xl font-bold text-blue-600">
+                      ${realAnalytics?.revenueByStep?.reduce((total, step) => total + step.skipRevenue, 0)?.toFixed(2) || '0.00'}
+                    </div>
+                    <div className="text-sm text-gray-600">Skipped Revenue</div>
+                  </>
+                )}
+                {revenueViewToggle === 'tips' && (
+                  <>
+                    <div className="text-2xl font-bold text-orange-600">
+                      ${realAnalytics?.totalTips?.toFixed(2) || '0.00'}
+                    </div>
+                    <div className="text-sm text-gray-600">Tips Revenue</div>
+                  </>
+                )}
+              </div>
+            </div>
             <CardContent>
               <div className={`${chartHeight} w-full`}>
-                {revenueViewToggle === 'time' ? (
-                  <ResponsiveContainer width="100%" height="100%">
-                    {(() => {
-                      if (revenueTimeToggle === 'month') {
-                        // Filter by selected year
-                        const monthly = analytics.revenueOverTime
-                          .filter(item => item.date.startsWith(selectedYear))
-                          .map((item, idx, arr) => ({
-                            ...item,
-                            date: new Date(item.date + '-01').toLocaleDateString('en-US', { month: 'short' }),
-                            revenue: Number((idx === 0 ? item.revenue : item.revenue - arr[idx-1].revenue).toFixed(2))
-                          }));
-                        return (
-                          <LineChart data={monthly}>
-                            <CartesianGrid strokeDasharray="3 3" />
-                            <XAxis dataKey="date" />
-                            <YAxis />
-                            <Tooltip formatter={(value) => [`$${Number(value).toFixed(2)}`, 'Revenue']} />
-                            <Line type="monotone" dataKey="revenue" stroke="#10b981" strokeWidth={2} />
-                          </LineChart>
-                        );
-                      } else if (revenueTimeToggle === 'week') {
-                        // Filter by selected month
-                        const monthStr = `${selectedYear}-${selectedMonth}`;
-                        const weekly = analytics.revenueByWeek
-                          .filter(item => (item.month || '').includes(monthStr))
-                          .map((item, idx) => ({
-                            ...item,
-                            week: `Week ${idx + 1}`,
-                            revenue: Number((item.revenue).toFixed(2))
-                          }));
-                        return (
-                          <LineChart data={weekly}>
-                            <CartesianGrid strokeDasharray="3 3" />
-                            <XAxis dataKey="week" />
-                            <YAxis />
-                            <Tooltip formatter={(value) => [`$${Number(value).toFixed(2)}`, 'Revenue']} />
-                            <Line type="monotone" dataKey="revenue" stroke="#10b981" strokeWidth={2} />
-                          </LineChart>
-                        );
-                      } else {
-                        // Filter by selected week (if needed)
-                        const daily = analytics.revenueByDay
-                          // .filter(item => item.weekDate === selectedWeek) // Uncomment if you want to filter by week
-                          .map(item => ({
-                            ...item,
-                            revenue: Number(item.revenue.toFixed(2))
-                          }));
-                        return (
-                          <LineChart data={daily}>
+                <ResponsiveContainer width="100%" height="100%">
+                  {(() => {
+                    // Get the appropriate data based on the toggle
+                    let chartData;
+                    let dataKey;
+                    let strokeColor;
+                    let tooltipLabel;
+
+                    if (revenueViewToggle === 'total') {
+                      chartData = realAnalytics?.revenueOverTime || [];
+                      dataKey = 'revenue';
+                      strokeColor = '#10b981';
+                      tooltipLabel = 'Total Revenue';
+                    } else if (revenueViewToggle === 'skip') {
+                      // Filter events to only include skip payments
+                      const skipEvents = realAnalytics?.events?.filter(e => e.eventType === 'step_skip') || [];
+                      chartData = generateRevenueOverTime(skipEvents);
+                      dataKey = 'revenue';
+                      strokeColor = '#3b82f6';
+                      tooltipLabel = 'Skip Payments';
+                    } else if (revenueViewToggle === 'tips') {
+                      chartData = realAnalytics?.tipsOverTime || [];
+                      dataKey = 'amount';
+                      strokeColor = '#f97316';
+                      tooltipLabel = 'Tip Payments';
+                    } else {
+                      // Default to total revenue
+                      chartData = realAnalytics?.revenueOverTime || [];
+                      dataKey = 'revenue';
+                      strokeColor = '#10b981';
+                      tooltipLabel = 'Total Revenue';
+                    }
+
+                    if (revenueTimeToggle === 'month') {
+                      // Generate all months for the selected year
+                      const allMonths = [];
+                      for (let month = 1; month <= 12; month++) {
+                        const monthKey = `${selectedYear}-${String(month).padStart(2, '0')}`;
+                        const monthData = chartData?.find(item => item.date === monthKey);
+                        allMonths.push({
+                          date: new Date(monthKey + '-01').toLocaleDateString('en-US', { month: 'short' }),
+                          [dataKey]: monthData ? Number(monthData[dataKey].toFixed(2)) : 0
+                        });
+                      }
+                                              return (
+                          <LineChart data={allMonths}>
+                          <CartesianGrid strokeDasharray="3 3" />
+                          <XAxis dataKey="date" />
+                          <YAxis />
+                          <Tooltip formatter={(value) => [`$${Number(value).toFixed(2)}`, '']} />
+                          <Line type="monotone" dataKey={dataKey} stroke={strokeColor} strokeWidth={2} />
+                        </LineChart>
+                      );
+                    } else if (revenueTimeToggle === 'week') {
+                      // Generate all weeks for the selected month with Monday dates
+                      const allWeeks = [];
+                      const selectedYearNum = parseInt(selectedYear);
+                      const selectedMonthNum = parseInt(selectedMonth);
+                      
+                      for (let week = 1; week <= 4; week++) {
+                        // Calculate the Monday date for each week
+                        const firstDayOfMonth = new Date(selectedYearNum, selectedMonthNum - 1, 1);
+                        const firstMonday = new Date(firstDayOfMonth);
+                        const dayOfWeek = firstDayOfMonth.getDay();
+                        const daysToAdd = dayOfWeek === 0 ? 1 : (8 - dayOfWeek); // If Sunday, go to next Monday
+                        firstMonday.setDate(firstDayOfMonth.getDate() + daysToAdd);
+                        
+                        // Add weeks to get to the current week
+                        const mondayDate = new Date(firstMonday);
+                        mondayDate.setDate(firstMonday.getDate() + (week - 1) * 7);
+                        
+                        const weekKey = `WEEK ${week}`;
+                        const weekData = chartData?.find(item => item.week === weekKey);
+                        allWeeks.push({
+                          week: mondayDate.toLocaleDateString('en-US', { day: 'numeric', month: 'short' }),
+                          [dataKey]: weekData ? Number(weekData[dataKey].toFixed(2)) : 0
+                        });
+                      }
+                                              return (
+                          <LineChart data={allWeeks}>
+                          <CartesianGrid strokeDasharray="3 3" />
+                          <XAxis dataKey="week" />
+                          <YAxis />
+                          <Tooltip formatter={(value) => [`$${Number(value).toFixed(2)}`, '']} />
+                          <Line type="monotone" dataKey={dataKey} stroke={strokeColor} strokeWidth={2} />
+                        </LineChart>
+                      );
+                    } else {
+                      // Daily view - generate all days of the week for the selected week
+                      const daysOfWeek = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
+                      
+                      // Calculate the Monday date for the selected week
+                      const selectedYearNum = parseInt(selectedYear);
+                      const selectedMonthNum = parseInt(selectedMonth);
+                      const weekNum = parseInt(selectedWeek.split(' ')[1]);
+                      
+                      const firstDayOfMonth = new Date(selectedYearNum, selectedMonthNum - 1, 1);
+                      const firstMonday = new Date(firstDayOfMonth);
+                      const dayOfWeek = firstDayOfMonth.getDay();
+                      const daysToAdd = dayOfWeek === 0 ? 1 : (8 - dayOfWeek);
+                      firstMonday.setDate(firstDayOfMonth.getDate() + daysToAdd);
+                      
+                      const selectedMonday = new Date(firstMonday);
+                      selectedMonday.setDate(firstMonday.getDate() + (weekNum - 1) * 7);
+                      
+                      const allDays = daysOfWeek.map((day, index) => {
+                        const currentDate = new Date(selectedMonday);
+                        currentDate.setDate(selectedMonday.getDate() + index);
+                        
+                        const dayData = chartData?.find(item => {
+                          // Match by the actual date or day name
+                          return item.day === day || 
+                                 (item.date && new Date(item.date).toDateString() === currentDate.toDateString());
+                        });
+                        
+                        return {
+                          day: `${currentDate.toLocaleDateString('en-US', { weekday: 'short' })} ${currentDate.getDate()}${getOrdinalSuffix(currentDate.getDate())}`,
+                          [dataKey]: dayData ? Number(dayData[dataKey].toFixed(2)) : 0
+                        };
+                      });
+                                                                      return (
+                          <LineChart data={allDays}>
                             <CartesianGrid strokeDasharray="3 3" />
                             <XAxis dataKey="day" />
                             <YAxis />
-                            <Tooltip formatter={(value) => [`$${Number(value).toFixed(2)}`, 'Revenue']} />
-                            <Line type="monotone" dataKey="revenue" stroke="#10b981" strokeWidth={2} />
+                            <Tooltip formatter={(value) => [`$${Number(value).toFixed(2)}`, '']} />
+                            <Line type="monotone" dataKey={dataKey} stroke={strokeColor} strokeWidth={2} />
                           </LineChart>
                         );
-                      }
-                    })()}
-                  </ResponsiveContainer>
-                ) : (
-                  (() => {
-                    console.log('BarChart By Step data:', analytics.revenueByStep);
-                    if (!analytics.revenueByStep || analytics.revenueByStep.length === 0) {
-                      return <div className="flex items-center justify-center h-full text-gray-400">No step data available</div>;
                     }
+                    
+                    // Default fallback
                     return (
-                      <ResponsiveContainer width="100%" height="100%">
-                        <BarChart data={analytics.revenueByStep.map(item => ({
-                          ...item,
-                          revenue: Number(item.revenue.toFixed(2))
-                        }))}>
-                          <CartesianGrid strokeDasharray="3 3" />
-                          <XAxis dataKey="stepTitle" />
-                          <YAxis />
-                          <Tooltip formatter={(value) => [`$${Number(value).toFixed(2)}`, 'Revenue']} />
-                          <Bar dataKey="revenue" fill="#10b981" />
-                        </BarChart>
-                      </ResponsiveContainer>
+                      <div className="flex items-center justify-center h-full text-gray-400">
+                        No data available
+                      </div>
                     );
-                  })()
-                )}
+                  })()}
+                </ResponsiveContainer>
               </div>
             </CardContent>
           </Card>
@@ -482,31 +764,51 @@ const TrailAnalytics: React.FC = () => {
       case 'tips':
         return (
           <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2 mb-4">
+                <Gift className="h-5 w-5 text-orange-600" />
+                Tips Analytics
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className={`${chartHeight} w-full`}>
+                <ResponsiveContainer width="100%" height="100%">
+                  <LineChart data={realAnalytics?.tipsOverTime || []}>
+                    <CartesianGrid strokeDasharray="3 3" />
+                    <XAxis dataKey="date" />
+                    <YAxis />
+                    <Tooltip formatter={(value) => [`$${Number(value).toFixed(2)}`, '']} />
+                    <Line type="monotone" dataKey="amount" stroke="#f97316" strokeWidth={2} />
+                  </LineChart>
+                </ResponsiveContainer>
+              </div>
+            </CardContent>
+          </Card>
+        );
+
+      case 'learners':
+        return (
+          <Card>
             <CardHeader className="flex flex-row items-start justify-between">
               <div>
                 <CardTitle className="flex items-center gap-2 mb-4">
-                  <Gift className="h-5 w-5 text-orange-600" />
-                  Tips Analytics
+                  <Users className="h-5 w-5 text-blue-600" />
+                  Learners
                 </CardTitle>
-                <div className="flex gap-2 items-center">
-                  <ToggleGroup
-                    type="single"
-                    value={tipsToggle}
-                    onValueChange={v => v && setTipsToggle(v as 'proportion' | 'overtime')}
-                    className="rounded-md bg-white border border-gray-200 flex gap-1 transition-all duration-300 h-9 items-center box-border p-1"
-                  >
-                    <ToggleGroupItem value="overtime" className="rounded-md px-4 h-7 min-h-0 py-0 flex items-center justify-center font-semibold text-sm box-border transition-all duration-300 data-[state=on]:bg-black data-[state=on]:text-white data-[state=off]:bg-white data-[state=off]:text-black">Over Time</ToggleGroupItem>
-                    <ToggleGroupItem value="proportion" className="rounded-md px-4 h-7 min-h-0 py-0 flex items-center justify-center font-semibold text-sm box-border transition-all duration-300 data-[state=on]:bg-black data-[state=on]:text-white data-[state=off]:bg-white data-[state=off]:text-black">By Step</ToggleGroupItem>
-                  </ToggleGroup>
-                  <div className={`flex gap-2 transition-all duration-300 ${tipsToggle === 'proportion' ? 'opacity-0 scale-95 pointer-events-none absolute' : 'opacity-100 scale-100 relative'}`}> 
-                    <Button size="sm" variant={tipsTimeToggle === 'day' ? 'default' : 'outline'} onClick={() => setTipsTimeToggle('day')}>Day</Button>
-                    <Button size="sm" variant={tipsTimeToggle === 'week' ? 'default' : 'outline'} onClick={() => setTipsTimeToggle('week')}>Week</Button>
-                    <Button size="sm" variant={tipsTimeToggle === 'month' ? 'default' : 'outline'} onClick={() => setTipsTimeToggle('month')}>Month</Button>
-                  </div>
+                <p className="text-sm text-gray-600 mb-2">
+                  Total visitors and learners over time
+                </p>
+                <div className="flex gap-2">
+                  <Button size="sm" variant={revenueTimeToggle === 'all' ? 'default' : 'outline'} onClick={() => setRevenueTimeToggle('all')}>Total</Button>
+                  <Button size="sm" variant={revenueTimeToggle === 'day' ? 'default' : 'outline'} onClick={() => setRevenueTimeToggle('day')}>Days</Button>
+                  <Button size="sm" variant={revenueTimeToggle === 'week' ? 'default' : 'outline'} onClick={() => setRevenueTimeToggle('week')}>Weeks</Button>
+                  <Button size="sm" variant={revenueTimeToggle === 'month' ? 'default' : 'outline'} onClick={() => setRevenueTimeToggle('month')}>Months</Button>
                 </div>
               </div>
-              <div className="text-lg font-semibold text-gray-900 pt-1 min-w-[120px]">
-                {tipsTimeToggle === 'month' && (
+              {/* Period Selector Dropdowns - Only show for specific time periods */}
+              {revenueTimeToggle !== 'all' && (
+                <div className="flex gap-2 items-center">
+                {revenueTimeToggle === 'month' && (
                   <Select value={selectedYear} onValueChange={setSelectedYear}>
                     <SelectTrigger className="w-[120px]">
                       <SelectValue />
@@ -519,166 +821,235 @@ const TrailAnalytics: React.FC = () => {
                     </SelectContent>
                   </Select>
                 )}
-                {tipsTimeToggle === 'week' && (
-                  <Select value={selectedMonth} onValueChange={setSelectedMonth}>
-                    <SelectTrigger className="w-[120px]">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="01">Jan</SelectItem>
-                      <SelectItem value="02">Feb</SelectItem>
-                      <SelectItem value="03">Mar</SelectItem>
-                      <SelectItem value="04">Apr</SelectItem>
-                      <SelectItem value="05">May</SelectItem>
-                      <SelectItem value="06">Jun</SelectItem>
-                      <SelectItem value="07">Jul</SelectItem>
-                      <SelectItem value="08">Aug</SelectItem>
-                      <SelectItem value="09">Sep</SelectItem>
-                      <SelectItem value="10">Oct</SelectItem>
-                      <SelectItem value="11">Nov</SelectItem>
-                      <SelectItem value="12">Dec</SelectItem>
-                    </SelectContent>
-                  </Select>
+                {revenueTimeToggle === 'week' && (
+                  <>
+                    <Select value={selectedYear} onValueChange={setSelectedYear}>
+                      <SelectTrigger className="w-[100px]">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="2022">2022</SelectItem>
+                        <SelectItem value="2023">2023</SelectItem>
+                        <SelectItem value="2024">2024</SelectItem>
+                        <SelectItem value="2025">2025</SelectItem>
+                      </SelectContent>
+                    </Select>
+                    <Select value={selectedMonth} onValueChange={setSelectedMonth}>
+                      <SelectTrigger className="w-[100px]">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="01">Jan</SelectItem>
+                        <SelectItem value="02">Feb</SelectItem>
+                        <SelectItem value="03">Mar</SelectItem>
+                        <SelectItem value="04">Apr</SelectItem>
+                        <SelectItem value="05">May</SelectItem>
+                        <SelectItem value="06">Jun</SelectItem>
+                        <SelectItem value="07">Jul</SelectItem>
+                        <SelectItem value="08">Aug</SelectItem>
+                        <SelectItem value="09">Sep</SelectItem>
+                        <SelectItem value="10">Oct</SelectItem>
+                        <SelectItem value="11">Nov</SelectItem>
+                        <SelectItem value="12">Dec</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </>
                 )}
-                {tipsTimeToggle === 'day' && (
-                  <Select value={selectedWeek} onValueChange={setSelectedWeek}>
-                    <SelectTrigger className="w-[120px]">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="WEEK 1">Week 1</SelectItem>
-                      <SelectItem value="WEEK 2">Week 2</SelectItem>
-                      <SelectItem value="WEEK 3">Week 3</SelectItem>
-                      <SelectItem value="WEEK 4">Week 4</SelectItem>
-                    </SelectContent>
-                  </Select>
+                {revenueTimeToggle === 'day' && (
+                  <div className="flex flex-col gap-2">
+                    <div className="flex gap-2">
+                      <Select value={selectedYear} onValueChange={setSelectedYear}>
+                        <SelectTrigger className="w-[100px]">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="2022">2022</SelectItem>
+                          <SelectItem value="2023">2023</SelectItem>
+                          <SelectItem value="2024">2024</SelectItem>
+                          <SelectItem value="2025">2025</SelectItem>
+                        </SelectContent>
+                      </Select>
+                      <Select value={selectedMonth} onValueChange={setSelectedMonth}>
+                        <SelectTrigger className="w-[100px]">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="01">Jan</SelectItem>
+                          <SelectItem value="02">Feb</SelectItem>
+                          <SelectItem value="03">Mar</SelectItem>
+                          <SelectItem value="04">Apr</SelectItem>
+                          <SelectItem value="05">May</SelectItem>
+                          <SelectItem value="06">Jun</SelectItem>
+                          <SelectItem value="07">Jul</SelectItem>
+                          <SelectItem value="08">Aug</SelectItem>
+                          <SelectItem value="09">Sep</SelectItem>
+                          <SelectItem value="10">Oct</SelectItem>
+                          <SelectItem value="11">Nov</SelectItem>
+                          <SelectItem value="12">Dec</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div className="flex justify-end">
+                      <Select value={selectedWeek} onValueChange={setSelectedWeek}>
+                        <SelectTrigger className="w-[100px]">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {(() => {
+                            const selectedYearNum = parseInt(selectedYear);
+                            const selectedMonthNum = parseInt(selectedMonth);
+                            const weeks = [];
+                            
+                            for (let week = 1; week <= 4; week++) {
+                              // Calculate the Monday date for each week
+                              const firstDayOfMonth = new Date(selectedYearNum, selectedMonthNum - 1, 1);
+                              const firstMonday = new Date(firstDayOfMonth);
+                              const dayOfWeek = firstDayOfMonth.getDay();
+                              const daysToAdd = dayOfWeek === 0 ? 1 : (8 - dayOfWeek);
+                              firstMonday.setDate(firstDayOfMonth.getDate() + daysToAdd);
+                              
+                              // Add weeks to get to the current week
+                              const mondayDate = new Date(firstMonday);
+                              mondayDate.setDate(firstMonday.getDate() + (week - 1) * 7);
+                              
+                              const weekKey = `WEEK ${week}`;
+                              const day = mondayDate.getDate();
+                              const ordinal = getOrdinalSuffix(day);
+                              const weekLabel = `${day}${ordinal}`;
+                              weeks.push({ key: weekKey, label: weekLabel });
+                            }
+                            
+                            return weeks.map(({ key, label }) => (
+                              <SelectItem key={key} value={key}>
+                                {label}
+                              </SelectItem>
+                            ));
+                          })()}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  </div>
                 )}
               </div>
+              )}
             </CardHeader>
+            {/* Learners Summary */}
+            <div className="px-6 py-4 bg-white">
+              <div className="text-center">
+                <div className="text-2xl font-bold text-blue-600">
+                  {realAnalytics?.totalLearners || 0}
+                </div>
+                <div className="text-sm text-gray-600">Total Learners</div>
+              </div>
+            </div>
             <CardContent>
               <div className={`${chartHeight} w-full`}>
-                {tipsToggle === 'overtime' ? (
-                  <ResponsiveContainer width="100%" height="100%">
-                    {(() => {
-                      if (tipsTimeToggle === 'month') {
-                        // Filter by selected year
-                        const monthly = analytics.revenueOverTime
-                          .filter(item => item.date.startsWith(selectedYear))
-                          .map((item, idx, arr) => ({
-                            ...item,
-                            tips: Number(((idx === 0 ? item.revenue : item.revenue - arr[idx-1].revenue) * 0.15).toFixed(2)),
-                            date: new Date(item.date + '-01').toLocaleDateString('en-US', { month: 'short' })
-                          }));
-                        return (
-                          <BarChart data={monthly}>
-                            <CartesianGrid strokeDasharray="3 3" />
-                            <XAxis dataKey="date" />
-                            <YAxis />
-                            <Tooltip formatter={(value) => [`$${Number(value).toFixed(2)}`, 'Tips']} />
-                            <Bar dataKey="tips" fill="#f97316" />
-                          </BarChart>
-                        );
-                      } else if (tipsTimeToggle === 'week') {
-                        // Filter by selected month
-                        const monthStr = `${selectedYear}-${selectedMonth}`;
-                        const weekly = analytics.revenueByWeek
-                          .filter(item => (item.month || '').includes(monthStr))
-                          .map((item, idx) => ({
-                            ...item,
-                            tips: Number((item.revenue * 0.15).toFixed(2)),
-                            week: `Week ${idx + 1}`
-                          }));
-                        return (
-                          <BarChart data={weekly}>
-                            <CartesianGrid strokeDasharray="3 3" />
-                            <XAxis dataKey="week" />
-                            <YAxis />
-                            <Tooltip formatter={(value) => [`$${Number(value).toFixed(2)}`, 'Tips']} />
-                            <Bar dataKey="tips" fill="#f97316" />
-                          </BarChart>
-                        );
-                      } else {
-                        // Filter by selected week (if needed)
-                        const daily = analytics.revenueByDay
-                          // .filter(item => item.weekDate === selectedWeek) // Uncomment if you want to filter by week
-                          .map(item => ({
-                            ...item,
-                            tips: Number((item.revenue * 0.15).toFixed(2))
-                          }));
-                        return (
-                          <BarChart data={daily}>
-                            <CartesianGrid strokeDasharray="3 3" />
-                            <XAxis dataKey="day" />
-                            <YAxis />
-                            <Tooltip formatter={(value) => [`$${Number(value).toFixed(2)}`, 'Tips']} />
-                            <Bar dataKey="tips" fill="#f97316" />
-                          </BarChart>
-                        );
-                      }
-                    })()}
-                  </ResponsiveContainer>
-                ) : (
-                  <ResponsiveContainer width="100%" height="100%">
-                    <BarChart data={analytics.revenueByStep.map(item => ({
-                      ...item,
-                      tips: Number((item.revenue * 0.15).toFixed(2))
-                    }))}>
-                      <CartesianGrid strokeDasharray="3 3" />
-                      <XAxis dataKey="stepTitle" />
-                      <YAxis />
-                      <Tooltip formatter={(value) => [`$${Number(value).toFixed(2)}`, 'Tips']} />
-                      <Bar dataKey="tips" fill="#f97316" />
-                    </BarChart>
-                  </ResponsiveContainer>
-                )}
-              </div>
-            </CardContent>
-          </Card>
-        );
+                <ResponsiveContainer width="100%" height="100%">
+                  {(() => {
+                    let chartData = realAnalytics?.learnersOverTime || [];
+                    let dataKey = 'learners';
+                    let strokeColor = '#3b82f6';
+                    let tooltipLabel = 'Total Learners';
 
-      case 'learners':
-        return (
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2 mb-4">
-                <Users className="h-5 w-5 text-blue-600" />
-                Learners Analytics
-              </CardTitle>
-              <div className="flex gap-2 items-center">
-                <ToggleGroup
-                  type="single"
-                  value={learnersToggle}
-                  onValueChange={v => v && setLearnersToggle(v as 'total' | 'step')}
-                  className="rounded-md bg-white border border-gray-200 flex gap-1 transition-all duration-300 h-9 items-center box-border p-1"
-                >
-                  <ToggleGroupItem value="total" className="rounded-md px-4 h-7 min-h-0 py-0 flex items-center justify-center font-semibold text-sm box-border transition-all duration-300 data-[state=on]:bg-black data-[state=on]:text-white data-[state=off]:bg-white data-[state=off]:text-black">Total</ToggleGroupItem>
-                  <ToggleGroupItem value="step" className="rounded-md px-4 h-7 min-h-0 py-0 flex items-center justify-center font-semibold text-sm box-border transition-all duration-300 data-[state=on]:bg-black data-[state=on]:text-white data-[state=off]:bg-white data-[state=off]:text-black">By Step</ToggleGroupItem>
-                </ToggleGroup>
-              </div>
-            </CardHeader>
-            <CardContent>
-              <div className={`${chartHeight} w-full`}>
-                {learnersToggle === 'total' ? (
-                  <ResponsiveContainer width="100%" height="100%">
-                    <BarChart data={[{ name: 'Total Learners', value: analytics.totalLearners }]}> 
-                      <CartesianGrid strokeDasharray="3 3" />
-                      <XAxis dataKey="name" />
-                      <YAxis allowDecimals={false} />
-                      <Tooltip />
-                      <Bar dataKey="value" fill="#3b82f6" />
-                    </BarChart>
-                  </ResponsiveContainer>
-                ) : (
-                  <ResponsiveContainer width="100%" height="100%">
-                    <BarChart data={analytics.learnersByStep}>
-                      <CartesianGrid strokeDasharray="3 3" />
-                      <XAxis dataKey="stepTitle" />
-                      <YAxis />
-                      <Tooltip />
-                      <Bar dataKey="learners" fill="#3b82f6" />
-                    </BarChart>
-                  </ResponsiveContainer>
-                )}
+                    if (revenueTimeToggle === 'month') {
+                      // Generate all months for the selected year
+                      const allMonths = [];
+                      for (let month = 1; month <= 12; month++) {
+                        const monthKey = `${selectedYear}-${String(month).padStart(2, '0')}`;
+                        const monthData = chartData?.find(item => item.date === monthKey);
+                        allMonths.push({
+                          date: new Date(monthKey + '-01').toLocaleDateString('en-US', { month: 'short' }),
+                          [dataKey]: monthData ? Number(monthData[dataKey]) : 0
+                        });
+                      }
+                      return (
+                        <LineChart data={allMonths}>
+                          <CartesianGrid strokeDasharray="3 3" />
+                          <XAxis dataKey="date" />
+                          <YAxis />
+                          <Tooltip formatter={(value) => [value, '']} />
+                          <Line type="monotone" dataKey={dataKey} stroke={strokeColor} strokeWidth={2} />
+                        </LineChart>
+                      );
+                    } else if (revenueTimeToggle === 'week') {
+                      // Generate all weeks for the selected month with Monday dates
+                      const allWeeks = [];
+                      const selectedYearNum = parseInt(selectedYear);
+                      const selectedMonthNum = parseInt(selectedMonth);
+                      
+                      for (let week = 1; week <= 4; week++) {
+                        // Calculate the Monday date for each week
+                        const firstDayOfMonth = new Date(selectedYearNum, selectedMonthNum - 1, 1);
+                        const firstMonday = new Date(firstDayOfMonth);
+                        const dayOfWeek = firstDayOfMonth.getDay();
+                        const daysToAdd = dayOfWeek === 0 ? 1 : (8 - dayOfWeek);
+                        firstMonday.setDate(firstDayOfMonth.getDate() + daysToAdd);
+                        
+                        // Add weeks to get to the current week
+                        const mondayDate = new Date(firstMonday);
+                        mondayDate.setDate(firstMonday.getDate() + (week - 1) * 7);
+                        
+                        const weekKey = `WEEK ${week}`;
+                        const weekData = chartData?.find(item => item.week === weekKey);
+                        allWeeks.push({
+                          week: mondayDate.toLocaleDateString('en-US', { day: 'numeric', month: 'short' }),
+                          [dataKey]: weekData ? Number(weekData[dataKey]) : 0
+                        });
+                      }
+                      return (
+                        <LineChart data={allWeeks}>
+                          <CartesianGrid strokeDasharray="3 3" />
+                          <XAxis dataKey="week" />
+                          <YAxis />
+                          <Tooltip formatter={(value) => [value, '']} />
+                          <Line type="monotone" dataKey={dataKey} stroke={strokeColor} strokeWidth={2} />
+                        </LineChart>
+                      );
+                    } else {
+                      // Daily view - generate all days of the week for the selected week
+                      const daysOfWeek = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
+                      
+                      // Calculate the Monday date for the selected week
+                      const selectedYearNum = parseInt(selectedYear);
+                      const selectedMonthNum = parseInt(selectedMonth);
+                      const weekNum = parseInt(selectedWeek.split(' ')[1]);
+                      
+                      const firstDayOfMonth = new Date(selectedYearNum, selectedMonthNum - 1, 1);
+                      const firstMonday = new Date(firstDayOfMonth);
+                      const dayOfWeek = firstDayOfMonth.getDay();
+                      const daysToAdd = dayOfWeek === 0 ? 1 : (8 - dayOfWeek);
+                      firstMonday.setDate(firstDayOfMonth.getDate() + daysToAdd);
+                      
+                      const selectedMonday = new Date(firstMonday);
+                      selectedMonday.setDate(firstMonday.getDate() + (weekNum - 1) * 7);
+                      
+                      const allDays = daysOfWeek.map((day, index) => {
+                        const currentDate = new Date(selectedMonday);
+                        currentDate.setDate(selectedMonday.getDate() + index);
+                        
+                        const dayData = chartData?.find(item => {
+                          // Match by the actual date or day name
+                          return item.day === day || 
+                                 (item.date && new Date(item.date).toDateString() === currentDate.toDateString());
+                        });
+                        
+                        return {
+                          day: `${currentDate.toLocaleDateString('en-US', { weekday: 'short' })} ${currentDate.getDate()}${getOrdinalSuffix(currentDate.getDate())}`,
+                          [dataKey]: dayData ? Number(dayData[dataKey]) : 0
+                        };
+                      });
+                      return (
+                        <LineChart data={allDays}>
+                          <CartesianGrid strokeDasharray="3 3" />
+                          <XAxis dataKey="day" />
+                          <YAxis />
+                          <Tooltip formatter={(value) => [value, '']} />
+                          <Line type="monotone" dataKey={dataKey} stroke={strokeColor} strokeWidth={2} />
+                        </LineChart>
+                      );
+                    }
+                  })()}
+                </ResponsiveContainer>
               </div>
             </CardContent>
           </Card>
@@ -687,28 +1058,266 @@ const TrailAnalytics: React.FC = () => {
       case 'completion':
         return (
           <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2 mb-4">
-                <TrendingUp className="h-5 w-5 text-purple-600" />
-                Completion Rate
-              </CardTitle>
-              <div className="flex gap-2">
-                <Button size="sm" variant="outline" disabled>Completion Rate</Button>
+            <CardHeader className="flex flex-row items-start justify-between">
+              <div>
+                <CardTitle className="flex items-center gap-2 mb-4">
+                  <TrendingUp className="h-5 w-5 text-purple-600" />
+                  Completion Rate
+                </CardTitle>
+                <p className="text-sm text-gray-600 mb-2">
+                  Percentage of learners who complete the trail over time
+                </p>
+                <div className="flex gap-2">
+                  <Button size="sm" variant={revenueTimeToggle === 'all' ? 'default' : 'outline'} onClick={() => setRevenueTimeToggle('all')}>Total</Button>
+                  <Button size="sm" variant={revenueTimeToggle === 'day' ? 'default' : 'outline'} onClick={() => setRevenueTimeToggle('day')}>Days</Button>
+                  <Button size="sm" variant={revenueTimeToggle === 'week' ? 'default' : 'outline'} onClick={() => setRevenueTimeToggle('week')}>Weeks</Button>
+                  <Button size="sm" variant={revenueTimeToggle === 'month' ? 'default' : 'outline'} onClick={() => setRevenueTimeToggle('month')}>Months</Button>
+                </div>
               </div>
+              {/* Period Selector Dropdowns - Only show for specific time periods */}
+              {revenueTimeToggle !== 'all' && (
+                <div className="flex gap-2 items-center">
+                {revenueTimeToggle === 'month' && (
+                  <Select value={selectedYear} onValueChange={setSelectedYear}>
+                    <SelectTrigger className="w-[120px]">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="2022">2022</SelectItem>
+                      <SelectItem value="2023">2023</SelectItem>
+                      <SelectItem value="2024">2024</SelectItem>
+                      <SelectItem value="2025">2025</SelectItem>
+                    </SelectContent>
+                  </Select>
+                )}
+                {revenueTimeToggle === 'week' && (
+                  <>
+                    <Select value={selectedYear} onValueChange={setSelectedYear}>
+                      <SelectTrigger className="w-[100px]">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="2022">2022</SelectItem>
+                        <SelectItem value="2023">2023</SelectItem>
+                        <SelectItem value="2024">2024</SelectItem>
+                        <SelectItem value="2025">2025</SelectItem>
+                      </SelectContent>
+                    </Select>
+                    <Select value={selectedMonth} onValueChange={setSelectedMonth}>
+                      <SelectTrigger className="w-[100px]">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="01">Jan</SelectItem>
+                        <SelectItem value="02">Feb</SelectItem>
+                        <SelectItem value="03">Mar</SelectItem>
+                        <SelectItem value="04">Apr</SelectItem>
+                        <SelectItem value="05">May</SelectItem>
+                        <SelectItem value="06">Jun</SelectItem>
+                        <SelectItem value="07">Jul</SelectItem>
+                        <SelectItem value="08">Aug</SelectItem>
+                        <SelectItem value="09">Sep</SelectItem>
+                        <SelectItem value="10">Oct</SelectItem>
+                        <SelectItem value="11">Nov</SelectItem>
+                        <SelectItem value="12">Dec</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </>
+                )}
+                {revenueTimeToggle === 'day' && (
+                  <div className="flex flex-col gap-2">
+                    <div className="flex gap-2">
+                      <Select value={selectedYear} onValueChange={setSelectedYear}>
+                        <SelectTrigger className="w-[100px]">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="2022">2022</SelectItem>
+                          <SelectItem value="2023">2023</SelectItem>
+                          <SelectItem value="2024">2024</SelectItem>
+                          <SelectItem value="2025">2025</SelectItem>
+                        </SelectContent>
+                      </Select>
+                      <Select value={selectedMonth} onValueChange={setSelectedMonth}>
+                        <SelectTrigger className="w-[100px]">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="01">Jan</SelectItem>
+                          <SelectItem value="02">Feb</SelectItem>
+                          <SelectItem value="03">Mar</SelectItem>
+                          <SelectItem value="04">Apr</SelectItem>
+                          <SelectItem value="05">May</SelectItem>
+                          <SelectItem value="06">Jun</SelectItem>
+                          <SelectItem value="07">Jul</SelectItem>
+                          <SelectItem value="08">Aug</SelectItem>
+                          <SelectItem value="09">Sep</SelectItem>
+                          <SelectItem value="10">Oct</SelectItem>
+                          <SelectItem value="11">Nov</SelectItem>
+                          <SelectItem value="12">Dec</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div className="flex justify-end">
+                      <Select value={selectedWeek} onValueChange={setSelectedWeek}>
+                        <SelectTrigger className="w-[100px]">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {(() => {
+                            const selectedYearNum = parseInt(selectedYear);
+                            const selectedMonthNum = parseInt(selectedMonth);
+                            const weeks = [];
+                            
+                            for (let week = 1; week <= 4; week++) {
+                              // Calculate the Monday date for each week
+                              const firstDayOfMonth = new Date(selectedYearNum, selectedMonthNum - 1, 1);
+                              const firstMonday = new Date(firstDayOfMonth);
+                              const dayOfWeek = firstDayOfMonth.getDay();
+                              const daysToAdd = dayOfWeek === 0 ? 1 : (8 - dayOfWeek);
+                              firstMonday.setDate(firstDayOfMonth.getDate() + daysToAdd);
+                              
+                              // Add weeks to get to the current week
+                              const mondayDate = new Date(firstMonday);
+                              mondayDate.setDate(firstMonday.getDate() + (week - 1) * 7);
+                              
+                              const weekKey = `WEEK ${week}`;
+                              const day = mondayDate.getDate();
+                              const ordinal = getOrdinalSuffix(day);
+                              const weekLabel = `${day}${ordinal}`;
+                              weeks.push({ key: weekKey, label: weekLabel });
+                            }
+                            
+                            return weeks.map(({ key, label }) => (
+                              <SelectItem key={key} value={key}>
+                                {label}
+                              </SelectItem>
+                            ));
+                          })()}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  </div>
+                )}
+              </div>
+              )}
             </CardHeader>
+            {/* Completion Rate Summary */}
+            <div className="px-6 py-4 bg-white">
+              <div className="text-center">
+                <div className="text-2xl font-bold text-purple-600">
+                  {realAnalytics?.completionRate?.toFixed(1) || '0.0'}%
+                </div>
+                <div className="text-sm text-gray-600">Completion Rate</div>
+              </div>
+            </div>
             <CardContent>
               <div className={`${chartHeight} w-full`}>
                 <ResponsiveContainer width="100%" height="100%">
-                  <BarChart data={[
-                    { name: 'Total Learners', value: analytics.totalLearners, fill: '#6b7280' },
-                    { name: 'Completed', value: Math.round(analytics.totalLearners * analytics.completionRate / 100), fill: '#8b5cf6' }
-                  ]}>
-                    <CartesianGrid strokeDasharray="3 3" />
-                    <XAxis dataKey="name" />
-                    <YAxis />
-                    <Tooltip />
-                    <Bar dataKey="value" />
-                  </BarChart>
+                  {(() => {
+                    let chartData = realAnalytics?.completionRateOverTime || [];
+                    let dataKey = 'completionRate';
+                    let strokeColor = '#8b5cf6';
+                    let tooltipLabel = 'Completion Rate';
+
+                    if (revenueTimeToggle === 'month') {
+                      // Generate all months for the selected year
+                      const allMonths = [];
+                      for (let month = 1; month <= 12; month++) {
+                        const monthKey = `${selectedYear}-${String(month).padStart(2, '0')}`;
+                        const monthData = chartData?.find(item => item.date === monthKey);
+                        allMonths.push({
+                          date: new Date(monthKey + '-01').toLocaleDateString('en-US', { month: 'short' }),
+                          [dataKey]: monthData ? Number(monthData[dataKey]) : 0
+                        });
+                      }
+                      return (
+                        <LineChart data={allMonths}>
+                          <CartesianGrid strokeDasharray="3 3" />
+                          <XAxis dataKey="date" />
+                          <YAxis domain={[0, 100]} />
+                          <Tooltip formatter={(value) => [`${Number(value).toFixed(1)}%`, '']} />
+                          <Line type="monotone" dataKey={dataKey} stroke={strokeColor} strokeWidth={2} />
+                        </LineChart>
+                      );
+                    } else if (revenueTimeToggle === 'week') {
+                      // Generate all weeks for the selected month with Monday dates
+                      const allWeeks = [];
+                      const selectedYearNum = parseInt(selectedYear);
+                      const selectedMonthNum = parseInt(selectedMonth);
+                      
+                      for (let week = 1; week <= 4; week++) {
+                        // Calculate the Monday date for each week
+                        const firstDayOfMonth = new Date(selectedYearNum, selectedMonthNum - 1, 1);
+                        const firstMonday = new Date(firstDayOfMonth);
+                        const dayOfWeek = firstDayOfMonth.getDay();
+                        const daysToAdd = dayOfWeek === 0 ? 1 : (8 - dayOfWeek);
+                        firstMonday.setDate(firstDayOfMonth.getDate() + daysToAdd);
+                        
+                        // Add weeks to get to the current week
+                        const mondayDate = new Date(firstMonday);
+                        mondayDate.setDate(firstMonday.getDate() + (week - 1) * 7);
+                        
+                        const weekKey = `WEEK ${week}`;
+                        const weekData = chartData?.find(item => item.week === weekKey);
+                        allWeeks.push({
+                          week: mondayDate.toLocaleDateString('en-US', { day: 'numeric', month: 'short' }),
+                          [dataKey]: weekData ? Number(weekData[dataKey]) : 0
+                        });
+                      }
+                      return (
+                        <LineChart data={allWeeks}>
+                          <CartesianGrid strokeDasharray="3 3" />
+                          <XAxis dataKey="week" />
+                          <YAxis domain={[0, 100]} />
+                          <Tooltip formatter={(value) => [`${Number(value).toFixed(1)}%`, '']} />
+                          <Line type="monotone" dataKey={dataKey} stroke={strokeColor} strokeWidth={2} />
+                        </LineChart>
+                      );
+                    } else {
+                      // Daily view - generate all days of the week for the selected week
+                      const daysOfWeek = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
+                      
+                      // Calculate the Monday date for the selected week
+                      const selectedYearNum = parseInt(selectedYear);
+                      const selectedMonthNum = parseInt(selectedMonth);
+                      const weekNum = parseInt(selectedWeek.split(' ')[1]);
+                      
+                      const firstDayOfMonth = new Date(selectedYearNum, selectedMonthNum - 1, 1);
+                      const firstMonday = new Date(firstDayOfMonth);
+                      const dayOfWeek = firstDayOfMonth.getDay();
+                      const daysToAdd = dayOfWeek === 0 ? 1 : (8 - dayOfWeek);
+                      firstMonday.setDate(firstDayOfMonth.getDate() + daysToAdd);
+                      
+                      const selectedMonday = new Date(firstMonday);
+                      selectedMonday.setDate(firstMonday.getDate() + (weekNum - 1) * 7);
+                      
+                      const allDays = daysOfWeek.map((day, index) => {
+                        const currentDate = new Date(selectedMonday);
+                        currentDate.setDate(selectedMonday.getDate() + index);
+                        
+                        const dayData = chartData?.find(item => {
+                          // Match by the actual date or day name
+                          return item.day === day || 
+                                 (item.date && new Date(item.date).toDateString() === currentDate.toDateString());
+                        });
+                        
+                        return {
+                          day: `${currentDate.toLocaleDateString('en-US', { weekday: 'short' })} ${currentDate.getDate()}${getOrdinalSuffix(currentDate.getDate())}`,
+                          [dataKey]: dayData ? Number(dayData[dataKey]) : 0
+                        };
+                      });
+                      return (
+                        <LineChart data={allDays}>
+                          <CartesianGrid strokeDasharray="3 3" />
+                          <XAxis dataKey="day" />
+                          <YAxis domain={[0, 100]} />
+                          <Tooltip formatter={(value) => [`${Number(value).toFixed(1)}%`, '']} />
+                          <Line type="monotone" dataKey={dataKey} stroke={strokeColor} strokeWidth={2} />
+                        </LineChart>
+                      );
+                    }
+                  })()}
                 </ResponsiveContainer>
               </div>
             </CardContent>
@@ -718,40 +1327,185 @@ const TrailAnalytics: React.FC = () => {
       case 'dropoff':
         return (
           <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2 mb-4">
-                <BarChart3 className="h-5 w-5 text-red-600" />
-                Retention Analytics
-              </CardTitle>
-              <div className="flex gap-2">
-                <Button size="sm" variant={dropoffToggle === 'step' ? 'default' : 'outline'} onClick={() => setDropoffToggle('step')}>By Step</Button>
-                <Button size="sm" variant={dropoffToggle === 'time' ? 'default' : 'outline'} onClick={() => setDropoffToggle('time')}>Over Time</Button>
+            <CardHeader className="flex flex-row items-start justify-between">
+              <div>
+                <CardTitle className="flex items-center gap-2 mb-4">
+                  <BarChart3 className="h-5 w-5 text-red-600" />
+                  Retention Analytics
+                </CardTitle>
+                <p className="text-sm text-gray-600 mb-2">
+                  Number of learners who reached each step over time
+                </p>
+                <div className="flex gap-2">
+                  <Button size="sm" variant={revenueTimeToggle === 'all' ? 'default' : 'outline'} onClick={() => setRevenueTimeToggle('all')}>Total</Button>
+                  <Button size="sm" variant={revenueTimeToggle === 'day' ? 'default' : 'outline'} onClick={() => setRevenueTimeToggle('day')}>Days</Button>
+                  <Button size="sm" variant={revenueTimeToggle === 'week' ? 'default' : 'outline'} onClick={() => setRevenueTimeToggle('week')}>Weeks</Button>
+                  <Button size="sm" variant={revenueTimeToggle === 'month' ? 'default' : 'outline'} onClick={() => setRevenueTimeToggle('month')}>Months</Button>
+                </div>
               </div>
+              {/* Period Selector Dropdowns - Only show for specific time periods */}
+              {revenueTimeToggle !== 'all' && (
+                <div className="flex gap-2 items-center">
+                  {revenueTimeToggle === 'month' && (
+                    <Select value={selectedYear} onValueChange={setSelectedYear}>
+                      <SelectTrigger className="w-[120px]">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="2022">2022</SelectItem>
+                        <SelectItem value="2023">2023</SelectItem>
+                        <SelectItem value="2024">2024</SelectItem>
+                        <SelectItem value="2025">2025</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  )}
+                  {revenueTimeToggle === 'week' && (
+                    <>
+                      <Select value={selectedYear} onValueChange={setSelectedYear}>
+                        <SelectTrigger className="w-[100px]">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="2022">2022</SelectItem>
+                          <SelectItem value="2023">2023</SelectItem>
+                          <SelectItem value="2024">2024</SelectItem>
+                          <SelectItem value="2025">2025</SelectItem>
+                        </SelectContent>
+                      </Select>
+                      <Select value={selectedMonth} onValueChange={setSelectedMonth}>
+                        <SelectTrigger className="w-[100px]">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="01">Jan</SelectItem>
+                          <SelectItem value="02">Feb</SelectItem>
+                          <SelectItem value="03">Mar</SelectItem>
+                          <SelectItem value="04">Apr</SelectItem>
+                          <SelectItem value="05">May</SelectItem>
+                          <SelectItem value="06">Jun</SelectItem>
+                          <SelectItem value="07">Jul</SelectItem>
+                          <SelectItem value="08">Aug</SelectItem>
+                          <SelectItem value="09">Sep</SelectItem>
+                          <SelectItem value="10">Oct</SelectItem>
+                          <SelectItem value="11">Nov</SelectItem>
+                          <SelectItem value="12">Dec</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </>
+                  )}
+                  {revenueTimeToggle === 'day' && (
+                    <div className="flex flex-col gap-2">
+                      <div className="flex gap-2">
+                        <Select value={selectedYear} onValueChange={setSelectedYear}>
+                          <SelectTrigger className="w-[100px]">
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="2022">2022</SelectItem>
+                            <SelectItem value="2023">2023</SelectItem>
+                            <SelectItem value="2024">2024</SelectItem>
+                            <SelectItem value="2025">2025</SelectItem>
+                          </SelectContent>
+                        </Select>
+                        <Select value={selectedMonth} onValueChange={setSelectedMonth}>
+                          <SelectTrigger className="w-[100px]">
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="01">Jan</SelectItem>
+                            <SelectItem value="02">Feb</SelectItem>
+                            <SelectItem value="03">Mar</SelectItem>
+                            <SelectItem value="04">Apr</SelectItem>
+                            <SelectItem value="05">May</SelectItem>
+                            <SelectItem value="06">Jun</SelectItem>
+                            <SelectItem value="07">Jul</SelectItem>
+                            <SelectItem value="08">Aug</SelectItem>
+                            <SelectItem value="09">Sep</SelectItem>
+                            <SelectItem value="10">Oct</SelectItem>
+                            <SelectItem value="11">Nov</SelectItem>
+                            <SelectItem value="12">Dec</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      <div className="flex justify-end">
+                        <Select value={selectedWeek} onValueChange={setSelectedWeek}>
+                          <SelectTrigger className="w-[100px]">
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {(() => {
+                              const selectedYearNum = parseInt(selectedYear);
+                              const selectedMonthNum = parseInt(selectedMonth);
+                              const weeks = [];
+                              
+                              for (let week = 1; week <= 4; week++) {
+                                // Calculate the Monday date for each week
+                                const firstDayOfMonth = new Date(selectedYearNum, selectedMonthNum - 1, 1);
+                                const firstMonday = new Date(firstDayOfMonth);
+                                const dayOfWeek = firstDayOfMonth.getDay();
+                                const daysToAdd = dayOfWeek === 0 ? 1 : (8 - dayOfWeek);
+                                firstMonday.setDate(firstDayOfMonth.getDate() + daysToAdd);
+                                
+                                // Add weeks to get to the current week
+                                const mondayDate = new Date(firstMonday);
+                                mondayDate.setDate(firstMonday.getDate() + (week - 1) * 7);
+                                
+                                const weekKey = `WEEK ${week}`;
+                                const day = mondayDate.getDate();
+                                const ordinal = getOrdinalSuffix(day);
+                                const weekLabel = `${day}${ordinal}`;
+                                weeks.push({ key: weekKey, label: weekLabel });
+                              }
+                              
+                              return weeks.map(({ key, label }) => (
+                                <SelectItem key={key} value={key}>
+                                  {label}
+                                </SelectItem>
+                              ));
+                            })()}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
             </CardHeader>
+            {/* Retention Summary */}
+            <div className="px-6 py-4 bg-white">
+              <div className="text-center">
+                <div className="text-2xl font-bold text-red-600">
+                  {revenueTimeToggle === 'all' 
+                    ? `${realAnalytics?.stepRetention?.[0]?.retentionRate?.toFixed(1) || '0.0'}%`
+                    : `${realAnalytics?.stepRetention?.[0]?.retentionRate?.toFixed(1) || '0.0'}%`
+                  }
+                </div>
+                <div className="text-sm text-gray-600">
+                  {revenueTimeToggle === 'all' ? 'Total Retention Rate' : 'Retention Rate'}
+                </div>
+              </div>
+            </div>
             <CardContent>
               <div className={`${chartHeight} w-full`}>
-                {dropoffToggle === 'step' ? (
-                  <ResponsiveContainer width="100%" height="100%">
-                    <BarChart data={analytics.dropOffData}>
-                      <CartesianGrid strokeDasharray="3 3" />
-                      <XAxis dataKey="step" />
-                      <YAxis />
-                      <Tooltip />
-                      <Bar dataKey="learnersReached" fill="#10b981" />
-                      <Bar dataKey="learnersCompleted" fill="#f97316" />
-                    </BarChart>
-                  </ResponsiveContainer>
-                ) : (
-                  <ResponsiveContainer width="100%" height="100%">
-                    <LineChart data={analytics.dropOffOverTime}>
-                      <CartesianGrid strokeDasharray="3 3" />
-                      <XAxis dataKey="date" />
-                      <YAxis />
-                      <Tooltip />
-                      <Line type="monotone" dataKey="dropOff" stroke="#10b981" strokeWidth={2} />
-                    </LineChart>
-                  </ResponsiveContainer>
-                )}
+                <ResponsiveContainer width="100%" height="100%">
+                  <LineChart data={realAnalytics?.stepRetention?.map(item => ({
+                    step: item.stepTitle,
+                    retentionRate: item.retentionRate,
+                    learnersReached: item.learnersReached
+                  })) || []}>
+                    <CartesianGrid strokeDasharray="3 3" />
+                    <XAxis dataKey="step" />
+                    <YAxis />
+                    <Tooltip formatter={(value, name, props) => {
+                      if (name === 'retentionRate') {
+                        return [`Learners ${props.payload.learnersReached}`, ''];
+                      }
+                      return [value, ''];
+                    }} />
+                    <YAxis tickFormatter={(value) => `${value}%`} />
+                    <Line type="monotone" dataKey="retentionRate" stroke="#10b981" strokeWidth={2} />
+                  </LineChart>
+                </ResponsiveContainer>
               </div>
             </CardContent>
           </Card>
@@ -760,60 +1514,270 @@ const TrailAnalytics: React.FC = () => {
       case 'watchtime':
         return (
           <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2 mb-4">
-                <Clock className="h-5 w-5 text-blue-600" />
-                Watch Time Analytics
-              </CardTitle>
-              <div className="flex gap-2 items-center">
-                <ToggleGroup
-                  type="single"
-                  value={watchTimeToggle}
-                  onValueChange={v => v && setWatchTimeToggle(v as 'total' | 'perStep' | 'overTime')}
-                  className="rounded-md bg-white border border-gray-200 flex gap-1 transition-all duration-300 h-9 items-center box-border p-1"
-                >
-                  <ToggleGroupItem value="total" className="rounded-md px-4 h-7 min-h-0 py-0 flex items-center justify-center font-semibold text-sm box-border transition-all duration-300 data-[state=on]:bg-black data-[state=on]:text-white data-[state=off]:bg-white data-[state=off]:text-black">Total</ToggleGroupItem>
-                  <ToggleGroupItem value="perStep" className="rounded-md px-4 h-7 min-h-0 py-0 flex items-center justify-center font-semibold text-sm box-border transition-all duration-300 data-[state=on]:bg-black data-[state=on]:text-white data-[state=off]:bg-white data-[state=off]:text-black">By Step</ToggleGroupItem>
-                  <ToggleGroupItem value="overTime" className="rounded-md px-4 h-7 min-h-0 py-0 flex items-center justify-center font-semibold text-sm box-border transition-all duration-300 data-[state=on]:bg-black data-[state=on]:text-white data-[state=off]:bg-white data-[state=off]:text-black">Over Time</ToggleGroupItem>
-                </ToggleGroup>
+            <CardHeader className="flex flex-row items-start justify-between">
+              <div>
+                <CardTitle className="flex items-center gap-2 mb-4">
+                  <Clock className="h-5 w-5 text-orange-600" />
+                  Watch Time Analytics
+                </CardTitle>
+                <p className="text-sm text-gray-600 mb-2">
+                  Total watch time and engagement over time
+                </p>
+                <div className="flex gap-2">
+                  <Button size="sm" variant={revenueTimeToggle === 'all' ? 'default' : 'outline'} onClick={() => setRevenueTimeToggle('all')}>Total</Button>
+                  <Button size="sm" variant={revenueTimeToggle === 'day' ? 'default' : 'outline'} onClick={() => setRevenueTimeToggle('day')}>Days</Button>
+                  <Button size="sm" variant={revenueTimeToggle === 'week' ? 'default' : 'outline'} onClick={() => setRevenueTimeToggle('week')}>Weeks</Button>
+                  <Button size="sm" variant={revenueTimeToggle === 'month' ? 'default' : 'outline'} onClick={() => setRevenueTimeToggle('month')}>Months</Button>
+                </div>
               </div>
+                            {/* Period Selector Dropdowns - Only show for specific time periods */}
+              {revenueTimeToggle !== 'all' && (
+                <div className="flex gap-2 items-center">
+                  {revenueTimeToggle === 'month' && (
+                    <Select value={selectedYear} onValueChange={setSelectedYear}>
+                      <SelectTrigger className="w-[120px]">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="2022">2022</SelectItem>
+                        <SelectItem value="2023">2023</SelectItem>
+                        <SelectItem value="2024">2024</SelectItem>
+                        <SelectItem value="2025">2025</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  )}
+                  {revenueTimeToggle === 'week' && (
+                    <>
+                      <Select value={selectedYear} onValueChange={setSelectedYear}>
+                        <SelectTrigger className="w-[100px]">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="2022">2022</SelectItem>
+                          <SelectItem value="2023">2023</SelectItem>
+                          <SelectItem value="2024">2024</SelectItem>
+                          <SelectItem value="2025">2025</SelectItem>
+                        </SelectContent>
+                      </Select>
+                      <Select value={selectedMonth} onValueChange={setSelectedMonth}>
+                        <SelectTrigger className="w-[100px]">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="01">Jan</SelectItem>
+                          <SelectItem value="02">Feb</SelectItem>
+                          <SelectItem value="03">Mar</SelectItem>
+                          <SelectItem value="04">Apr</SelectItem>
+                          <SelectItem value="05">May</SelectItem>
+                          <SelectItem value="06">Jun</SelectItem>
+                          <SelectItem value="07">Jul</SelectItem>
+                          <SelectItem value="08">Aug</SelectItem>
+                          <SelectItem value="09">Sep</SelectItem>
+                          <SelectItem value="10">Oct</SelectItem>
+                          <SelectItem value="11">Nov</SelectItem>
+                          <SelectItem value="12">Dec</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </>
+                  )}
+                  {revenueTimeToggle === 'day' && (
+                    <div className="flex flex-col gap-2">
+                      <div className="flex gap-2">
+                        <Select value={selectedYear} onValueChange={setSelectedYear}>
+                          <SelectTrigger className="w-[100px]">
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="2022">2022</SelectItem>
+                            <SelectItem value="2023">2023</SelectItem>
+                            <SelectItem value="2024">2024</SelectItem>
+                            <SelectItem value="2025">2025</SelectItem>
+                          </SelectContent>
+                        </Select>
+                        <Select value={selectedMonth} onValueChange={setSelectedMonth}>
+                          <SelectTrigger className="w-[100px]">
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="01">Jan</SelectItem>
+                            <SelectItem value="02">Feb</SelectItem>
+                            <SelectItem value="03">Mar</SelectItem>
+                            <SelectItem value="04">Apr</SelectItem>
+                            <SelectItem value="05">May</SelectItem>
+                            <SelectItem value="06">Jun</SelectItem>
+                            <SelectItem value="07">Jul</SelectItem>
+                            <SelectItem value="08">Aug</SelectItem>
+                            <SelectItem value="09">Sep</SelectItem>
+                            <SelectItem value="10">Oct</SelectItem>
+                            <SelectItem value="11">Nov</SelectItem>
+                            <SelectItem value="12">Dec</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      <div className="flex justify-end">
+                        <Select value={selectedWeek} onValueChange={setSelectedWeek}>
+                          <SelectTrigger className="w-[100px]">
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {(() => {
+                              const selectedYearNum = parseInt(selectedYear);
+                              const selectedMonthNum = parseInt(selectedMonth);
+                              const weeks = [];
+                              
+                              for (let week = 1; week <= 4; week++) {
+                                const firstDayOfMonth = new Date(selectedYearNum, selectedMonthNum - 1, 1);
+                                const firstMonday = new Date(firstDayOfMonth);
+                                const dayOfWeek = firstDayOfMonth.getDay();
+                                const daysToAdd = dayOfWeek === 0 ? 1 : (8 - dayOfWeek);
+                                firstMonday.setDate(firstDayOfMonth.getDate() + daysToAdd);
+                                
+                                const mondayDate = new Date(firstMonday);
+                                mondayDate.setDate(firstMonday.getDate() + (week - 1) * 7);
+                                
+                                weeks.push({
+                                  key: `WEEK ${week}`,
+                                  label: `${mondayDate.getDate()}${getOrdinalSuffix(mondayDate.getDate())}`
+                                });
+                              }
+                              
+                              return weeks.map(({ key, label }) => (
+                                <SelectItem key={key} value={key}>
+                                  {label}
+                                </SelectItem>
+                              ));
+                            })()}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
             </CardHeader>
+            {/* Watch Time Summary */}
+            <div className="px-6 py-4 bg-white">
+              <div className="text-center">
+                <div className="text-2xl font-bold text-orange-600">
+                  {revenueTimeToggle === 'all' 
+                    ? `${(realAnalytics?.totalWatchTime || 0) / 60} hrs`
+                    : `${(realAnalytics?.totalWatchTime || 0) / 60} hrs`
+                  }
+                </div>
+                <div className="text-sm text-gray-600">
+                  {revenueTimeToggle === 'all' ? 'Total Watch Time' : 'Watch Time'}
+                </div>
+              </div>
+            </div>
             <CardContent>
               <div className={`${chartHeight} w-full`}>
-                {watchTimeToggle === 'total' ? (
-                  <ResponsiveContainer width="100%" height="100%">
-                    <BarChart data={[
-                      { name: 'Total Watch Time', value: analytics.totalWatchTime, fill: '#6b7280' },
-                      { name: 'Average Watch Time', value: analytics.totalWatchTime / analytics.totalLearners, fill: '#8b5cf6' }
-                    ]}>
-                      <CartesianGrid strokeDasharray="3 3" />
-                      <XAxis dataKey="name" />
-                      <YAxis />
-                      <Tooltip />
-                      <Bar dataKey="value" />
-                    </BarChart>
-                  </ResponsiveContainer>
-                ) : watchTimeToggle === 'perStep' ? (
-                  <ResponsiveContainer width="100%" height="100%">
-                    <BarChart data={analytics.watchTimePerStep}>
-                      <CartesianGrid strokeDasharray="3 3" />
-                      <XAxis dataKey="stepTitle" />
-                      <YAxis />
-                      <Tooltip />
-                      <Bar dataKey="watchTime" fill="#10b981" />
-                    </BarChart>
-                  </ResponsiveContainer>
-                ) : (
-                  <ResponsiveContainer width="100%" height="100%">
-                    <LineChart data={analytics.watchTimeOverTime}>
-                      <CartesianGrid strokeDasharray="3 3" />
-                      <XAxis dataKey="date" />
-                      <YAxis />
-                      <Tooltip />
-                      <Line type="monotone" dataKey="watchTime" stroke="#10b981" strokeWidth={2} />
-                    </LineChart>
-                  </ResponsiveContainer>
-                )}
+                <ResponsiveContainer width="100%" height="100%">
+                  {(() => {
+                    let chartData = realAnalytics?.watchTimeOverTime || [];
+                    let dataKey = 'watchTime';
+                    let strokeColor = '#f97316';
+                    let tooltipLabel = 'Watch Time';
+
+                    if (revenueTimeToggle === 'month') {
+                      // Generate all months for the selected year
+                      const allMonths = [];
+                      for (let month = 1; month <= 12; month++) {
+                        const monthKey = `${selectedYear}-${String(month).padStart(2, '0')}`;
+                        const monthData = chartData?.find(item => item.date === monthKey);
+                        allMonths.push({
+                          date: new Date(monthKey + '-01').toLocaleDateString('en-US', { month: 'short' }),
+                          [dataKey]: monthData ? Number(monthData[dataKey]) / 60 : 0 // Convert minutes to hours
+                        });
+                      }
+                      return (
+                        <LineChart data={allMonths}>
+                          <CartesianGrid strokeDasharray="3 3" />
+                          <XAxis dataKey="date" />
+                          <YAxis tickFormatter={(value) => `${value} hrs`} />
+                          <Tooltip formatter={(value) => [`${Number(value).toFixed(2)} hrs`, '']} />
+                          <Line type="monotone" dataKey={dataKey} stroke={strokeColor} strokeWidth={2} />
+                        </LineChart>
+                      );
+                    } else if (revenueTimeToggle === 'week') {
+                      // Generate all weeks for the selected month with Monday dates
+                      const allWeeks = [];
+                      const selectedYearNum = parseInt(selectedYear);
+                      const selectedMonthNum = parseInt(selectedMonth);
+                      
+                      for (let week = 1; week <= 4; week++) {
+                        // Calculate the Monday date for each week
+                        const firstDayOfMonth = new Date(selectedYearNum, selectedMonthNum - 1, 1);
+                        const firstMonday = new Date(firstDayOfMonth);
+                        const dayOfWeek = firstDayOfMonth.getDay();
+                        const daysToAdd = dayOfWeek === 0 ? 1 : (8 - dayOfWeek);
+                        firstMonday.setDate(firstDayOfMonth.getDate() + daysToAdd);
+                        
+                        // Add weeks to get to the current week
+                        const mondayDate = new Date(firstMonday);
+                        mondayDate.setDate(firstMonday.getDate() + (week - 1) * 7);
+                        
+                        const weekKey = `WEEK ${week}`;
+                        const weekData = chartData?.find(item => item.week === weekKey);
+                        allWeeks.push({
+                          week: mondayDate.toLocaleDateString('en-US', { day: 'numeric', month: 'short' }),
+                          [dataKey]: weekData ? Number(weekData[dataKey]) / 60 : 0 // Convert minutes to hours
+                        });
+                      }
+                      return (
+                        <LineChart data={allWeeks}>
+                          <CartesianGrid strokeDasharray="3 3" />
+                          <XAxis dataKey="week" />
+                          <YAxis tickFormatter={(value) => `${value} hrs`} />
+                          <Tooltip formatter={(value) => [`${Number(value).toFixed(2)} hrs`, '']} />
+                          <Line type="monotone" dataKey={dataKey} stroke={strokeColor} strokeWidth={2} />
+                        </LineChart>
+                      );
+                    } else {
+                      // Daily view - generate all days of the week for the selected week
+                      const daysOfWeek = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
+                      
+                      // Calculate the Monday date for the selected week
+                      const selectedYearNum = parseInt(selectedYear);
+                      const selectedMonthNum = parseInt(selectedMonth);
+                      const weekNum = parseInt(selectedWeek.split(' ')[1]);
+                      
+                      const firstDayOfMonth = new Date(selectedYearNum, selectedMonthNum - 1, 1);
+                      const firstMonday = new Date(firstDayOfMonth);
+                      const dayOfWeek = firstDayOfMonth.getDay();
+                      const daysToAdd = dayOfWeek === 0 ? 1 : (8 - dayOfWeek);
+                      firstMonday.setDate(firstDayOfMonth.getDate() + daysToAdd);
+                      
+                      const selectedMonday = new Date(firstMonday);
+                      selectedMonday.setDate(firstMonday.getDate() + (weekNum - 1) * 7);
+                      
+                      const allDays = daysOfWeek.map((day, index) => {
+                        const currentDate = new Date(selectedMonday);
+                        currentDate.setDate(selectedMonday.getDate() + index);
+                        
+                        const dayData = chartData?.find(item => {
+                          // Match by the actual date or day name
+                          const itemDate = new Date(item.date);
+                          return itemDate.toDateString() === currentDate.toDateString();
+                        });
+                        
+                        return {
+                          day: `${day.slice(0, 3)} ${currentDate.getDate()}${getOrdinalSuffix(currentDate.getDate())}`,
+                          [dataKey]: dayData ? Number(dayData[dataKey]) / 60 : 0 // Convert minutes to hours
+                        };
+                      });
+                      
+                      return (
+                        <LineChart data={allDays}>
+                          <CartesianGrid strokeDasharray="3 3" />
+                          <XAxis dataKey="day" />
+                          <YAxis tickFormatter={(value) => `${value} hrs`} />
+                          <Tooltip formatter={(value) => [`${Number(value).toFixed(2)} hrs`, '']} />
+                          <Line type="monotone" dataKey={dataKey} stroke={strokeColor} strokeWidth={2} />
+                        </LineChart>
+                      );
+                    }
+                  })()}
+                </ResponsiveContainer>
               </div>
             </CardContent>
           </Card>
@@ -842,6 +1806,24 @@ const TrailAnalytics: React.FC = () => {
               <h1 className="text-2xl font-bold text-gray-900">Trail Analytics</h1>
               <p className="text-gray-600">Detailed insights for your trail performance</p>
             </div>
+          </div>
+          <div className="flex items-center gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={handleRefreshAnalytics}
+              className="text-blue-600 border-blue-200 hover:bg-blue-50"
+            >
+              Refresh
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={handleResetAnalytics}
+              className="text-red-600 border-red-200 hover:bg-red-50"
+            >
+              Reset Analytics
+            </Button>
           </div>
         </div>
       </div>
@@ -920,27 +1902,18 @@ const TrailAnalytics: React.FC = () => {
                         <DollarSign className="h-5 w-5 text-green-600" />
                         <div className="flex-1">
                           <p className="text-sm font-medium text-gray-900">Revenue</p>
-                          <p className="text-lg font-bold text-green-600">${analytics.revenue.toFixed(2)}</p>
+                          <p className="text-lg font-bold text-green-600">${realAnalytics?.totalRevenue?.toFixed(2) || '0.00'}</p>
                         </div>
                       </div>
                     </div>
-                    <div className={`p-3 rounded-lg cursor-pointer transition-colors ${activeMetric === 'tips' ? 'bg-orange-100 border-2 border-orange-300' : 'bg-gray-50 hover:bg-gray-100'}`}
-                      onClick={() => setActiveMetric('tips')}>
-                      <div className="flex items-center gap-3">
-                        <Gift className="h-5 w-5 text-orange-600" />
-                        <div className="flex-1">
-                          <p className="text-sm font-medium text-gray-900">Tips</p>
-                          <p className="text-lg font-bold text-orange-600">${analytics.tips.toFixed(2)}</p>
-                        </div>
-                      </div>
-                    </div>
+
                     <div className={`p-3 rounded-lg cursor-pointer transition-colors ${activeMetric === 'learners' ? 'bg-blue-100 border-2 border-blue-300' : 'bg-gray-50 hover:bg-gray-100'}`}
                       onClick={() => setActiveMetric('learners')}>
                       <div className="flex items-center gap-3">
                         <Users className="h-5 w-5 text-blue-600" />
                         <div className="flex-1">
                           <p className="text-sm font-medium text-gray-900">Total Learners</p>
-                          <p className="text-lg font-bold text-blue-600">{analytics.totalLearners}</p>
+                          <p className="text-lg font-bold text-blue-600">{realAnalytics?.totalLearners || 0}</p>
                         </div>
                       </div>
                     </div>
@@ -950,7 +1923,7 @@ const TrailAnalytics: React.FC = () => {
                         <TrendingUp className="h-5 w-5 text-purple-600" />
                         <div className="flex-1">
                           <p className="text-sm font-medium text-gray-900">Completion Rate</p>
-                          <p className="text-lg font-bold text-purple-600">{analytics.completionRate}%</p>
+                          <p className="text-lg font-bold text-purple-600">{realAnalytics?.completionRate?.toFixed(1) || '0.0'}%</p>
                         </div>
                       </div>
                     </div>
@@ -960,7 +1933,7 @@ const TrailAnalytics: React.FC = () => {
                         <BarChart3 className="h-5 w-5 text-red-600" />
                         <div className="flex-1">
                           <p className="text-sm font-medium text-gray-900">Retention Rate</p>
-                          <p className="text-lg font-bold text-red-600">{analytics.dropOffData[0]?.retentionRate || 0}%</p>
+                          <p className="text-lg font-bold text-red-600">{realAnalytics?.stepRetention?.[0]?.retentionRate?.toFixed(1) || '0.0'}%</p>
                         </div>
                       </div>
                     </div>
@@ -970,7 +1943,7 @@ const TrailAnalytics: React.FC = () => {
                         <Clock className="h-5 w-5 text-amber-600" />
                         <div className="flex-1">
                           <p className="text-sm font-medium text-gray-900">Watch Time</p>
-                          <p className="text-lg font-bold text-amber-600">{analytics.totalWatchTime || 0} min</p>
+                          <p className="text-lg font-bold text-amber-600">{realAnalytics?.totalWatchTime || 0} min</p>
                         </div>
                       </div>
                     </div>
