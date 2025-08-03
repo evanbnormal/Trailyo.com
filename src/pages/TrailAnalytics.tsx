@@ -666,7 +666,7 @@ const TrailAnalytics: React.FC = () => {
                           <CartesianGrid strokeDasharray="3 3" />
                           <XAxis dataKey="date" />
                           <YAxis />
-                          <Tooltip formatter={(value) => [`$${Number(value).toFixed(2)}`, '']} />
+                          <Tooltip formatter={(value) => [`$${Number(value).toFixed(2)}`, '']} labelFormatter={() => ''} />
                           <Line type="monotone" dataKey={dataKey} stroke={strokeColor} strokeWidth={2} />
                         </LineChart>
                       );
@@ -700,7 +700,7 @@ const TrailAnalytics: React.FC = () => {
                           <CartesianGrid strokeDasharray="3 3" />
                           <XAxis dataKey="week" />
                           <YAxis />
-                          <Tooltip formatter={(value) => [`$${Number(value).toFixed(2)}`, '']} />
+                          <Tooltip formatter={(value) => [`$${Number(value).toFixed(2)}`, '']} labelFormatter={() => ''} />
                           <Line type="monotone" dataKey={dataKey} stroke={strokeColor} strokeWidth={2} />
                         </LineChart>
                       );
@@ -742,7 +742,7 @@ const TrailAnalytics: React.FC = () => {
                             <CartesianGrid strokeDasharray="3 3" />
                             <XAxis dataKey="day" />
                             <YAxis />
-                            <Tooltip formatter={(value) => [`$${Number(value).toFixed(2)}`, '']} />
+                            <Tooltip formatter={(value) => [`$${Number(value).toFixed(2)}`, '']} labelFormatter={() => ''} />
                             <Line type="monotone" dataKey={dataKey} stroke={strokeColor} strokeWidth={2} />
                           </LineChart>
                         );
@@ -967,7 +967,7 @@ const TrailAnalytics: React.FC = () => {
                           <CartesianGrid strokeDasharray="3 3" />
                           <XAxis dataKey="date" />
                           <YAxis />
-                          <Tooltip formatter={(value) => [value, '']} />
+                          <Tooltip formatter={(value) => [value, '']} labelFormatter={() => ''} />
                           <Line type="monotone" dataKey={dataKey} stroke={strokeColor} strokeWidth={2} />
                         </LineChart>
                       );
@@ -1001,7 +1001,7 @@ const TrailAnalytics: React.FC = () => {
                           <CartesianGrid strokeDasharray="3 3" />
                           <XAxis dataKey="week" />
                           <YAxis />
-                          <Tooltip formatter={(value) => [value, '']} />
+                          <Tooltip formatter={(value) => [value, '']} labelFormatter={() => ''} />
                           <Line type="monotone" dataKey={dataKey} stroke={strokeColor} strokeWidth={2} />
                         </LineChart>
                       );
@@ -1043,7 +1043,7 @@ const TrailAnalytics: React.FC = () => {
                           <CartesianGrid strokeDasharray="3 3" />
                           <XAxis dataKey="day" />
                           <YAxis />
-                          <Tooltip formatter={(value) => [value, '']} />
+                          <Tooltip formatter={(value) => [value, '']} labelFormatter={() => ''} />
                           <Line type="monotone" dataKey={dataKey} stroke={strokeColor} strokeWidth={2} />
                         </LineChart>
                       );
@@ -1236,7 +1236,7 @@ const TrailAnalytics: React.FC = () => {
                           <CartesianGrid strokeDasharray="3 3" />
                           <XAxis dataKey="date" />
                           <YAxis domain={[0, 100]} />
-                          <Tooltip formatter={(value) => [`${Number(value).toFixed(1)}%`, '']} />
+                          <Tooltip formatter={(value) => [`${Number(value).toFixed(1)}%`, '']} labelFormatter={() => ''} />
                           <Line type="monotone" dataKey={dataKey} stroke={strokeColor} strokeWidth={2} />
                         </LineChart>
                       );
@@ -1270,7 +1270,7 @@ const TrailAnalytics: React.FC = () => {
                           <CartesianGrid strokeDasharray="3 3" />
                           <XAxis dataKey="week" />
                           <YAxis domain={[0, 100]} />
-                          <Tooltip formatter={(value) => [`${Number(value).toFixed(1)}%`, '']} />
+                          <Tooltip formatter={(value) => [`${Number(value).toFixed(1)}%`, '']} labelFormatter={() => ''} />
                           <Line type="monotone" dataKey={dataKey} stroke={strokeColor} strokeWidth={2} />
                         </LineChart>
                       );
@@ -1312,7 +1312,7 @@ const TrailAnalytics: React.FC = () => {
                           <CartesianGrid strokeDasharray="3 3" />
                           <XAxis dataKey="day" />
                           <YAxis domain={[0, 100]} />
-                          <Tooltip formatter={(value) => [`${Number(value).toFixed(1)}%`, '']} />
+                          <Tooltip formatter={(value) => [`${Number(value).toFixed(1)}%`, '']} labelFormatter={() => ''} />
                           <Line type="monotone" dataKey={dataKey} stroke={strokeColor} strokeWidth={2} />
                         </LineChart>
                       );
@@ -1501,7 +1501,7 @@ const TrailAnalytics: React.FC = () => {
                         return [`Learners ${props.payload.learnersReached}`, ''];
                       }
                       return [value, ''];
-                    }} />
+                    }} labelFormatter={() => ''} />
                     <YAxis tickFormatter={(value) => `${value}%`} />
                     <Line type="monotone" dataKey="retentionRate" stroke="#10b981" strokeWidth={2} />
                   </LineChart>
@@ -1698,7 +1698,7 @@ const TrailAnalytics: React.FC = () => {
                             const formattedValue = Number(value) < 1 ? Number(value).toFixed(1) : Math.round(Number(value));
                             return `${formattedValue} hrs`;
                           }} />
-                          <Tooltip formatter={(value) => [`${Number(value).toFixed(2)} hrs`, '']} />
+                          <Tooltip formatter={(value) => [`${Number(value).toFixed(2)} hrs`, '']} labelFormatter={() => ''} />
                           <Line type="monotone" dataKey={dataKey} stroke={strokeColor} strokeWidth={2} />
                         </LineChart>
                       );
@@ -1736,7 +1736,7 @@ const TrailAnalytics: React.FC = () => {
                             const formattedValue = Number(value) < 1 ? Number(value).toFixed(1) : Math.round(Number(value));
                             return `${formattedValue} hrs`;
                           }} />
-                          <Tooltip formatter={(value) => [`${Number(value).toFixed(2)} hrs`, '']} />
+                          <Tooltip formatter={(value) => [`${Number(value).toFixed(2)} hrs`, '']} labelFormatter={() => ''} />
                           <Line type="monotone" dataKey={dataKey} stroke={strokeColor} strokeWidth={2} />
                         </LineChart>
                       );
@@ -1783,7 +1783,7 @@ const TrailAnalytics: React.FC = () => {
                             const formattedValue = Number(value) < 1 ? Number(value).toFixed(1) : Math.round(Number(value));
                             return `${formattedValue} hrs`;
                           }} />
-                          <Tooltip formatter={(value) => [`${Number(value).toFixed(2)} hrs`, '']} />
+                          <Tooltip formatter={(value) => [`${Number(value).toFixed(2)} hrs`, '']} labelFormatter={() => ''} />
                           <Line type="monotone" dataKey={dataKey} stroke={strokeColor} strokeWidth={2} />
                         </LineChart>
                       );
