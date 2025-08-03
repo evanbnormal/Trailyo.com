@@ -532,6 +532,10 @@ const LearnerView: React.FC = () => {
                     [stepIndex]: watchedPercentage
                   }));
 
+                  // Track video watch time in analytics (in minutes)
+                  const watchTimeMinutes = watchTimeRef.current[stepIndex].totalWatched / 60;
+                  analyticsService.trackVideoWatch(trail.id, stepIndex, trail.steps[stepIndex].title, watchTimeMinutes);
+
                   if (watchedPercentage >= 80) {
                     setVideoCompleted(prev => ({
                       ...prev,
@@ -688,8 +692,10 @@ const LearnerView: React.FC = () => {
 
     // If this is a video step, track video completion
     if (currentStep.type === 'video' && videoWatchTime[currentStepIndex]) {
-      const watchTime = videoWatchTime[currentStepIndex];
-      analyticsService.trackVideoWatch(trail.id, currentStepIndex, currentStep.title, watchTime);
+      const watchPercentage = videoWatchTime[currentStepIndex];
+      // Convert percentage to minutes (assuming 5 minute video)
+      const watchTimeMinutes = (watchPercentage / 100) * 5;
+      analyticsService.trackVideoWatch(trail.id, currentStepIndex, currentStep.title, watchTimeMinutes);
     }
 
     // Mark current step as completed
@@ -746,6 +752,20 @@ const LearnerView: React.FC = () => {
     console.log(`Completing step ${stepIndex}, moving to step ${stepIndex + 1}`);
     console.log(`Before: progressStepIndex=${progressStepIndex}, completedSteps=${Array.from(completedSteps)}`);
 
+    const currentStep = trail.steps[stepIndex];
+    if (!currentStep) return;
+
+    // Track step completion
+    analyticsService.trackStepComplete(trail.id, stepIndex, currentStep.title);
+
+    // If this is a video step, track video completion
+    if (currentStep.type === 'video' && videoWatchTime[stepIndex]) {
+      const watchPercentage = videoWatchTime[stepIndex];
+      // Convert percentage to minutes (assuming 5 minute video)
+      const watchTimeMinutes = (watchPercentage / 100) * 5;
+      analyticsService.trackVideoWatch(trail.id, stepIndex, currentStep.title, watchTimeMinutes);
+    }
+
     // Add current step to completed steps
     setCompletedSteps(prev => new Set([...prev, stepIndex]));
 
@@ -756,7 +776,6 @@ const LearnerView: React.FC = () => {
     }
 
     // If current step has a source and is not a video, open the link
-    const currentStep = trail.steps[stepIndex];
     if (currentStep?.source && currentStep?.type !== 'video') {
       if (typeof window !== 'undefined') {
         window.open(currentStep.source, '_blank');
@@ -767,6 +786,8 @@ const LearnerView: React.FC = () => {
     if (isLastStep) {
       // Trail completed
       setCompleted(true);
+      // Track trail completion
+      analyticsService.trackTrailComplete(trail.id);
       toast({
         title: "Congratulations!",
         description: "You have completed the trail!",

@@ -541,7 +541,7 @@ const Profile: React.FC = () => {
               <Button
                 size="sm"
                 variant="secondary"
-                className="h-8 w-8 p-0 bg-white/90 hover:bg-white"
+                className="h-8 w-8 p-0 bg-white/90 hover:bg-gray-100 transition-all duration-200"
                 onClick={(e) => {
                   e.stopPropagation();
                   handleViewAnalytics(trail);

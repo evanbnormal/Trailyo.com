@@ -1660,8 +1660,8 @@ const TrailAnalytics: React.FC = () => {
               <div className="text-center">
                 <div className="text-2xl font-bold text-orange-600">
                   {revenueTimeToggle === 'all' 
-                    ? `${(realAnalytics?.totalWatchTime || 0) / 60} hrs`
-                    : `${(realAnalytics?.totalWatchTime || 0) / 60} hrs`
+                    ? `${((realAnalytics?.totalWatchTime || 0) / 60).toFixed(2)} hrs`
+                    : `${((realAnalytics?.totalWatchTime || 0) / 60).toFixed(2)} hrs`
                   }
                 </div>
                 <div className="text-sm text-gray-600">
@@ -1693,7 +1693,11 @@ const TrailAnalytics: React.FC = () => {
                         <LineChart data={allMonths}>
                           <CartesianGrid strokeDasharray="3 3" />
                           <XAxis dataKey="date" />
-                          <YAxis tickFormatter={(value) => `${value} hrs`} />
+                          <YAxis tickFormatter={(value) => {
+                            // Format to show whole numbers or max 1 decimal place
+                            const formattedValue = Number(value) < 1 ? Number(value).toFixed(1) : Math.round(Number(value));
+                            return `${formattedValue} hrs`;
+                          }} />
                           <Tooltip formatter={(value) => [`${Number(value).toFixed(2)} hrs`, '']} />
                           <Line type="monotone" dataKey={dataKey} stroke={strokeColor} strokeWidth={2} />
                         </LineChart>
@@ -1727,7 +1731,11 @@ const TrailAnalytics: React.FC = () => {
                         <LineChart data={allWeeks}>
                           <CartesianGrid strokeDasharray="3 3" />
                           <XAxis dataKey="week" />
-                          <YAxis tickFormatter={(value) => `${value} hrs`} />
+                          <YAxis tickFormatter={(value) => {
+                            // Format to show whole numbers or max 1 decimal place
+                            const formattedValue = Number(value) < 1 ? Number(value).toFixed(1) : Math.round(Number(value));
+                            return `${formattedValue} hrs`;
+                          }} />
                           <Tooltip formatter={(value) => [`${Number(value).toFixed(2)} hrs`, '']} />
                           <Line type="monotone" dataKey={dataKey} stroke={strokeColor} strokeWidth={2} />
                         </LineChart>
@@ -1770,7 +1778,11 @@ const TrailAnalytics: React.FC = () => {
                         <LineChart data={allDays}>
                           <CartesianGrid strokeDasharray="3 3" />
                           <XAxis dataKey="day" />
-                          <YAxis tickFormatter={(value) => `${value} hrs`} />
+                          <YAxis tickFormatter={(value) => {
+                            // Format to show whole numbers or max 1 decimal place
+                            const formattedValue = Number(value) < 1 ? Number(value).toFixed(1) : Math.round(Number(value));
+                            return `${formattedValue} hrs`;
+                          }} />
                           <Tooltip formatter={(value) => [`${Number(value).toFixed(2)} hrs`, '']} />
                           <Line type="monotone" dataKey={dataKey} stroke={strokeColor} strokeWidth={2} />
                         </LineChart>
