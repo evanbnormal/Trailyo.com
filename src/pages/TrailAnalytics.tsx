@@ -1955,7 +1955,7 @@ const TrailAnalytics: React.FC = () => {
                         <Clock className="h-5 w-5 text-amber-600" />
                         <div className="flex-1">
                           <p className="text-sm font-medium text-gray-900">Watch Time</p>
-                          <p className="text-lg font-bold text-amber-600">{realAnalytics?.totalWatchTime || 0} min</p>
+                          <p className="text-lg font-bold text-amber-600">{Number(realAnalytics?.totalWatchTime || 0).toFixed(2)} min</p>
                         </div>
                       </div>
                     </div>
