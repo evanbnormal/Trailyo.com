@@ -1275,7 +1275,8 @@ const TrailAnalytics: React.FC = () => {
                         </LineChart>
                       );
                     } else {
-                      // Daily view - generate all days of the week for the selected week
+                      // Daily view - use actual daily data from backend
+                      const dailyData = realAnalytics?.completionRateByDay || [];
                       const daysOfWeek = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
                       
                       // Calculate the Monday date for the selected week
@@ -1296,11 +1297,10 @@ const TrailAnalytics: React.FC = () => {
                         const currentDate = new Date(selectedMonday);
                         currentDate.setDate(selectedMonday.getDate() + index);
                         
-                        const dayData = chartData?.find(item => {
-                          // Match by the actual date or day name
-                          return item.day === day || 
-                                 (item.date && new Date(item.date).toDateString() === currentDate.toDateString());
-                        });
+                        // Format current date to match backend format (YYYY-MM-DD)
+                        const dateKey = `${currentDate.getFullYear()}-${String(currentDate.getMonth() + 1).padStart(2, '0')}-${String(currentDate.getDate()).padStart(2, '0')}`;
+                        
+                        const dayData = dailyData.find(item => item.date === dateKey);
                         
                         return {
                           day: `${currentDate.toLocaleDateString('en-US', { weekday: 'short' })} ${currentDate.getDate()}${getOrdinalSuffix(currentDate.getDate())}`,

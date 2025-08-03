@@ -132,6 +132,7 @@ function calculateAnalyticsFromEvents(trailId: string, events: any[]) {
   
   // Calculate total learners over time (cumulative unique viewers like YouTube)
   const learnersOverTime = new Map<string, number>();
+  const learnersByDay = new Map<string, number>();
   let cumulativeLearners = 0;
   
   // Sort trail views by timestamp to calculate cumulative
@@ -140,37 +141,58 @@ function calculateAnalyticsFromEvents(trailId: string, events: any[]) {
   sortedTrailViews.forEach(event => {
     const date = new Date(event.timestamp);
     const monthKey = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
+    const dayKey = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
     cumulativeLearners += 1;
     learnersOverTime.set(monthKey, cumulativeLearners);
+    learnersByDay.set(dayKey, (learnersByDay.get(dayKey) || 0) + 1);
   });
   
   const learnersOverTimeArray = Array.from(learnersOverTime.entries())
     .sort(([a], [b]) => a.localeCompare(b))
     .map(([date, learners]) => ({ date, learners }));
   
+  const learnersByDayArray = Array.from(learnersByDay.entries())
+    .sort(([a], [b]) => a.localeCompare(b))
+    .map(([date, learners]) => ({ date, learners }));
+  
   // Calculate completion rate over time (percentage of learners who reach reward)
   const monthlyCompletions = new Map<string, number>();
   const monthlyLearners = new Map<string, number>();
+  const dailyCompletions = new Map<string, number>();
+  const dailyLearners = new Map<string, number>();
   
-  // Count final step completions by month
+  // Count final step completions by month and day
   finalStepCompletions.forEach(event => {
     const date = new Date(event.timestamp);
     const monthKey = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
+    const dayKey = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
     monthlyCompletions.set(monthKey, (monthlyCompletions.get(monthKey) || 0) + 1);
+    dailyCompletions.set(dayKey, (dailyCompletions.get(dayKey) || 0) + 1);
   });
   
-  // Count total learners by month
+  // Count total learners by month and day
   trailViews.forEach(event => {
     const date = new Date(event.timestamp);
     const monthKey = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
+    const dayKey = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
     monthlyLearners.set(monthKey, (monthlyLearners.get(monthKey) || 0) + 1);
+    dailyLearners.set(dayKey, (dailyLearners.get(dayKey) || 0) + 1);
   });
   
-  // Calculate completion rate over time (percentage)
+  // Calculate completion rate over time (percentage) - monthly
   const completionRateOverTime = Array.from(monthlyCompletions.entries())
     .sort(([a], [b]) => a.localeCompare(b))
     .map(([date, completions]) => {
       const totalLearners = monthlyLearners.get(date) || 0;
+      const completionRate = totalLearners > 0 ? (completions / totalLearners) * 100 : 0;
+      return { date, completionRate };
+    });
+  
+  // Calculate completion rate by day
+  const completionRateByDay = Array.from(dailyCompletions.entries())
+    .sort(([a], [b]) => a.localeCompare(b))
+    .map(([date, completions]) => {
+      const totalLearners = dailyLearners.get(date) || 0;
       const completionRate = totalLearners > 0 ? (completions / totalLearners) * 100 : 0;
       return { date, completionRate };
     });
@@ -185,6 +207,7 @@ function calculateAnalyticsFromEvents(trailId: string, events: any[]) {
   
   // Calculate watch time over time (cumulative like YouTube)
   const watchTimeOverTime = new Map<string, number>();
+  const watchTimeByDay = new Map<string, number>();
   let cumulativeWatchTime = 0;
   
   // Sort video watches by timestamp to calculate cumulative
@@ -193,12 +216,18 @@ function calculateAnalyticsFromEvents(trailId: string, events: any[]) {
   sortedVideoWatches.forEach(event => {
     const date = new Date(event.timestamp);
     const monthKey = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
+    const dayKey = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
     const watchTimeMinutes = event.data.watchTime || 0;
     cumulativeWatchTime += watchTimeMinutes;
     watchTimeOverTime.set(monthKey, cumulativeWatchTime);
+    watchTimeByDay.set(dayKey, (watchTimeByDay.get(dayKey) || 0) + watchTimeMinutes);
   });
   
   const watchTimeOverTimeArray = Array.from(watchTimeOverTime.entries())
+    .sort(([a], [b]) => a.localeCompare(b))
+    .map(([date, watchTime]) => ({ date, watchTime }));
+  
+  const watchTimeByDayArray = Array.from(watchTimeByDay.entries())
     .sort(([a], [b]) => a.localeCompare(b))
     .map(([date, watchTime]) => ({ date, watchTime }));
   
@@ -325,6 +354,7 @@ function calculateAnalyticsFromEvents(trailId: string, events: any[]) {
     totalTips: totalTips,
     completionRate: completionRate, // Percentage who reach reward
     completionRateOverTime: completionRateOverTime, // Completion rate over time
+    completionRateByDay: completionRateByDay, // Completion rate by day
     totalWatchTime: totalWatchTime,
     stepRetention: stepRetention, // Percentage who reach each step
     videoWatchTime: videoWatchTime,
@@ -334,7 +364,9 @@ function calculateAnalyticsFromEvents(trailId: string, events: any[]) {
     tipProportion: tipProportion,
     usersWhoTipped: usersWhoTipped,
     watchTimeOverTime: watchTimeOverTimeArray, // Cumulative watch time over time
+    watchTimeByDay: watchTimeByDayArray, // Watch time by day
     learnersOverTime: learnersOverTimeArray, // Cumulative learners over time
+    learnersByDay: learnersByDayArray, // Learners by day
     events
   };
 }
