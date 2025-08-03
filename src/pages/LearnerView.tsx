@@ -559,6 +559,21 @@ const LearnerView: React.FC = () => {
                 ...prev,
                 [stepIndex]: true
               }));
+              
+              // Automatically complete the step when video ends
+              if (stepIndex === currentStepIndex) {
+                // Track step completion
+                analyticsService.trackStepComplete(trail.id, stepIndex, trail.steps[stepIndex].title);
+                
+                // Mark step as completed
+                setCompletedSteps(prev => new Set([...prev, stepIndex]));
+                
+                // If this is the final step, mark trail as completed
+                if (stepIndex === trail.steps.length - 1) {
+                  setCompleted(true);
+                  analyticsService.trackTrailComplete(trail.id);
+                }
+              }
             }
           },
           onReady: () => {
@@ -1359,6 +1374,18 @@ const LearnerView: React.FC = () => {
                                     className="disabled:opacity-50 disabled:cursor-not-allowed bg-gradient-to-r from-yellow-500 to-amber-600 text-white hover:from-yellow-600 hover:to-amber-700 shadow-lg px-6 py-3 text-base font-semibold"
                                   >
                                     🎉 Claim Reward 🎉
+                                  </Button>
+                                </div>
+                              )}
+                              
+                              {/* Auto-complete reward steps when reached */}
+                              {step.type === 'reward' && canStepProceed(index) && !completedSteps.has(index) && (
+                                <div className="mt-4 text-center">
+                                  <Button
+                                    onClick={() => handleStepNext(index)}
+                                    className="bg-green-500 text-white hover:bg-green-600"
+                                  >
+                                    ✅ Auto-Complete Reward
                                   </Button>
                                 </div>
                               )}
