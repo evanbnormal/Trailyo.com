@@ -1660,8 +1660,8 @@ const TrailAnalytics: React.FC = () => {
               <div className="text-center">
                 <div className="text-2xl font-bold text-orange-600">
                   {revenueTimeToggle === 'all' 
-                    ? `${((realAnalytics?.totalWatchTime || 0) / 60).toFixed(2)} hrs`
-                    : `${((realAnalytics?.totalWatchTime || 0) / 60).toFixed(2)} hrs`
+                    ? `${Number(realAnalytics?.totalWatchTime || 0).toFixed(2)} min`
+                    : `${Number(realAnalytics?.totalWatchTime || 0).toFixed(2)} min`
                   }
                 </div>
                 <div className="text-sm text-gray-600">
