@@ -306,6 +306,7 @@ function calculateAnalyticsFromEvents(trailId: string, events: any[]) {
   
   // Revenue over time (cumulative like YouTube)
   const revenueOverTime = new Map<string, number>();
+  const revenueByDay = new Map<string, number>();
   let cumulativeRevenue = 0;
   
   // Combine all revenue events (skip payments + tips)
@@ -320,11 +321,17 @@ function calculateAnalyticsFromEvents(trailId: string, events: any[]) {
   sortedRevenueEvents.forEach(event => {
     const date = new Date(event.timestamp);
     const monthKey = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
+    const dayKey = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
     cumulativeRevenue += event.amount;
     revenueOverTime.set(monthKey, cumulativeRevenue);
+    revenueByDay.set(dayKey, (revenueByDay.get(dayKey) || 0) + event.amount);
   });
   
   const revenueOverTimeArray = Array.from(revenueOverTime.entries())
+    .sort(([a], [b]) => a.localeCompare(b))
+    .map(([date, revenue]) => ({ date, revenue }));
+    
+  const revenueByDayArray = Array.from(revenueByDay.entries())
     .sort(([a], [b]) => a.localeCompare(b))
     .map(([date, revenue]) => ({ date, revenue }));
   
@@ -360,6 +367,7 @@ function calculateAnalyticsFromEvents(trailId: string, events: any[]) {
     videoWatchTime: videoWatchTime,
     revenueByStep: revenueByStep,
     revenueOverTime: revenueOverTimeArray, // Cumulative revenue over time
+    revenueByDay: revenueByDayArray, // Revenue by day
     tipsOverTime: tipsOverTimeArray, // Cumulative tips over time
     tipProportion: tipProportion,
     usersWhoTipped: usersWhoTipped,

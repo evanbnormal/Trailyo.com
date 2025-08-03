@@ -726,11 +726,10 @@ const TrailAnalytics: React.FC = () => {
                         const currentDate = new Date(selectedMonday);
                         currentDate.setDate(selectedMonday.getDate() + index);
                         
-                        const dayData = chartData?.find(item => {
-                          // Match by the actual date or day name
-                          return item.day === day || 
-                                 (item.date && new Date(item.date).toDateString() === currentDate.toDateString());
-                        });
+                        // Format current date to match backend format (YYYY-MM-DD)
+                        const dateKey = `${currentDate.getFullYear()}-${String(currentDate.getMonth() + 1).padStart(2, '0')}-${String(currentDate.getDate()).padStart(2, '0')}`;
+                        
+                        const dayData = realAnalytics?.revenueByDay?.find(item => item.date === dateKey);
                         
                         return {
                           day: `${currentDate.toLocaleDateString('en-US', { weekday: 'short' })} ${currentDate.getDate()}${getOrdinalSuffix(currentDate.getDate())}`,
@@ -1027,11 +1026,10 @@ const TrailAnalytics: React.FC = () => {
                         const currentDate = new Date(selectedMonday);
                         currentDate.setDate(selectedMonday.getDate() + index);
                         
-                        const dayData = chartData?.find(item => {
-                          // Match by the actual date or day name
-                          return item.day === day || 
-                                 (item.date && new Date(item.date).toDateString() === currentDate.toDateString());
-                        });
+                        // Format current date to match backend format (YYYY-MM-DD)
+                        const dateKey = `${currentDate.getFullYear()}-${String(currentDate.getMonth() + 1).padStart(2, '0')}-${String(currentDate.getDate()).padStart(2, '0')}`;
+                        
+                        const dayData = realAnalytics?.learnersByDay?.find(item => item.date === dateKey);
                         
                         return {
                           day: `${currentDate.toLocaleDateString('en-US', { weekday: 'short' })} ${currentDate.getDate()}${getOrdinalSuffix(currentDate.getDate())}`,
@@ -1762,11 +1760,10 @@ const TrailAnalytics: React.FC = () => {
                         const currentDate = new Date(selectedMonday);
                         currentDate.setDate(selectedMonday.getDate() + index);
                         
-                        const dayData = chartData?.find(item => {
-                          // Match by the actual date or day name
-                          const itemDate = new Date(item.date);
-                          return itemDate.toDateString() === currentDate.toDateString();
-                        });
+                        // Format current date to match backend format (YYYY-MM-DD)
+                        const dateKey = `${currentDate.getFullYear()}-${String(currentDate.getMonth() + 1).padStart(2, '0')}-${String(currentDate.getDate()).padStart(2, '0')}`;
+                        
+                        const dayData = realAnalytics?.watchTimeByDay?.find(item => item.date === dateKey);
                         
                         return {
                           day: `${day.slice(0, 3)} ${currentDate.getDate()}${getOrdinalSuffix(currentDate.getDate())}`,
