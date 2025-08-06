@@ -1,12 +1,23 @@
 import { NextRequest, NextResponse } from 'next/server';
 import Stripe from 'stripe';
 
-const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
-  apiVersion: '2025-06-30.basil',
-});
+// Initialize Stripe only if API key is available (runtime only)
+const getStripe = () => {
+  if (process.env.STRIPE_SECRET_KEY) {
+    return new Stripe(process.env.STRIPE_SECRET_KEY, {
+      apiVersion: '2025-06-30.basil',
+    });
+  }
+  return null;
+};
 
 export async function GET(request: NextRequest) {
   try {
+    const stripe = getStripe();
+    if (!stripe) {
+      return NextResponse.json({ error: 'Stripe not configured' }, { status: 500 });
+    }
+    
     const { searchParams } = new URL(request.url);
     const userId = searchParams.get('userId');
 
