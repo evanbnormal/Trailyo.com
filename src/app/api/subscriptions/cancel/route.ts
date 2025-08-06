@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '../../../../lib/db';
-import { stripe } from '../../../../lib/stripe';
+import { getStripe } from '../../../../lib/stripe';
 
 export async function POST(request: NextRequest) {
   try {
@@ -26,6 +26,14 @@ export async function POST(request: NextRequest) {
     }
 
     // Cancel subscription in Stripe
+    const stripe = getStripe();
+    if (!stripe) {
+      return NextResponse.json(
+        { error: 'Stripe not configured' },
+        { status: 500 }
+      );
+    }
+    
     const canceledSubscription = await stripe.subscriptions.update(
       dbSubscription.stripeSubscriptionId,
       { cancel_at_period_end: true }
