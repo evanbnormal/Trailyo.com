@@ -1,0 +1,7 @@
+# Exclude React Router pages from Next.js build
+src/pages/
+src/App.tsx
+src/main.tsx
+src/App.css
+src/index.css
+src/vite-env.d.ts 

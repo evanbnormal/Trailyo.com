@@ -2,12 +2,23 @@ import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
 import Stripe from 'stripe';
 
-const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
-  apiVersion: '2025-06-30.basil',
-});
+// Initialize Stripe only if API key is available (runtime only)
+const getStripe = () => {
+  if (process.env.STRIPE_SECRET_KEY) {
+    return new Stripe(process.env.STRIPE_SECRET_KEY, {
+      apiVersion: '2025-06-30.basil',
+    });
+  }
+  return null;
+};
 
 export async function DELETE(request: NextRequest) {
   try {
+    const stripe = getStripe();
+    if (!stripe) {
+      return NextResponse.json({ error: 'Stripe not configured' }, { status: 500 });
+    }
+
     const { userId, email } = await request.json();
 
     if (!userId || !email) {

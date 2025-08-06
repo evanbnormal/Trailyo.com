@@ -1,11 +1,11 @@
 'use client'
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, Suspense } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
 import { Button } from '@/components/ui/button';
 import { CheckCircle, XCircle } from 'lucide-react';
 
-export default function ConfirmEmailPage() {
+function ConfirmEmailContent() {
   const searchParams = useSearchParams();
   const router = useRouter();
   const [status, setStatus] = useState<'loading' | 'success' | 'error'>('loading');
@@ -94,5 +94,25 @@ export default function ConfirmEmailPage() {
         )}
       </div>
     </div>
+  );
+}
+
+function LoadingFallback() {
+  return (
+    <div className="min-h-screen bg-gray-50 flex items-center justify-center p-6">
+      <div className="bg-white rounded-lg shadow-xl p-12 max-w-md w-full text-center">
+        <div className="animate-spin rounded-full h-16 w-16 border-b-2 border-blue-600 mx-auto mb-6"></div>
+        <h1 className="text-2xl font-bold text-gray-900 mb-4">Loading...</h1>
+        <p className="text-gray-600">Please wait...</p>
+      </div>
+    </div>
+  );
+}
+
+export default function ConfirmEmailPage() {
+  return (
+    <Suspense fallback={<LoadingFallback />}>
+      <ConfirmEmailContent />
+    </Suspense>
   );
 } 
