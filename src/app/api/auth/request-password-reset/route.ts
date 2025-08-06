@@ -3,8 +3,14 @@ import sgMail from '@sendgrid/mail';
 import { db } from '@/lib/db';
 import crypto from 'crypto';
 
-// Set your SendGrid API key from environment variable
-sgMail.setApiKey(process.env.SENDGRID_API_KEY!);
+// Initialize SendGrid only if API key is available (runtime only)
+const initializeSendGrid = () => {
+  if (process.env.SENDGRID_API_KEY) {
+    sgMail.setApiKey(process.env.SENDGRID_API_KEY);
+    return true;
+  }
+  return false;
+};
 
 // Database will be used for reset tokens
 
@@ -65,6 +71,13 @@ export async function POST(request: NextRequest) {
 
     // Send reset email
     try {
+      const sendGridInitialized = initializeSendGrid();
+      if (!sendGridInitialized) {
+        console.log('SendGrid not initialized - skipping email');
+        // Continue without sending email for now
+        return NextResponse.json({ success: true });
+      }
+      
       // Use port 3001 since that's where your app is running
       const baseUrl = process.env.BASE_URL || 'http://localhost:3001';
       const resetUrl = `${baseUrl}/reset-password?token=${token}`;

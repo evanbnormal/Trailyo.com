@@ -3,11 +3,14 @@ import sgMail from '@sendgrid/mail';
 import { db } from '@/lib/db';
 import bcrypt from 'bcryptjs';
 
-// Debug log to confirm the API key is loaded
-console.log('SENDGRID_API_KEY:', process.env.SENDGRID_API_KEY);
-
-// Set your SendGrid API key from environment variable
-sgMail.setApiKey(process.env.SENDGRID_API_KEY!);
+// Initialize SendGrid only if API key is available (runtime only)
+const initializeSendGrid = () => {
+  if (process.env.SENDGRID_API_KEY) {
+    sgMail.setApiKey(process.env.SENDGRID_API_KEY);
+    return true;
+  }
+  return false;
+};
 
 // In-memory user store as fallback
 let users: any[] = [];
@@ -91,32 +94,38 @@ export async function POST(request: NextRequest) {
           // Send confirmation email first
           try {
             console.log('About to send confirmation email to', email);
-            const baseUrl = process.env.BASE_URL || 'http://localhost:3000';
-            const confirmationUrl = `${baseUrl}/api/auth/confirm-email?email=${encodeURIComponent(email)}`;
-            await sgMail.send({
-              to: email,
-              from: 'noreply@trailyo.com',
-              subject: 'Confirm your email',
-              text: 'Click the link to confirm your email!',
-              html: `
-                <div style="background:#111;padding:32px 0;text-align:center;font-family:sans-serif;">
-                  <img src="${baseUrl}/Asset%2010newest.png" alt="Trailyo" style="height:48px;margin-bottom:24px;" />
-                  <h2 style="color:#fff;margin-bottom:16px;font-size:24px;">Confirm your email</h2>
-                  <p style="color:#ccc;margin-bottom:32px;font-size:16px;">
-                    Click the button below to verify your email and activate your account.
-                  </p>
-                  <a href="${confirmationUrl}" style="display:inline-block;padding:12px 32px;background:#fbbf24;color:#111;text-decoration:none;border-radius:6px;font-weight:bold;font-size:16px;">
-                    Confirm Email
-                  </a>
-                  <p style="color:#888;margin-top:32px;font-size:12px;">
-                    If you did not sign up for Trailyo, you can ignore this email.
-                  </p>
-                </div>
-              `,
-            });
-            console.log('Email sent successfully to', email);
-            console.log('Email details - To:', email, 'From: noreply@trailyo.com', 'Subject: Confirm your email');
-            console.log('Confirmation URL:', confirmationUrl);
+            const sendGridInitialized = initializeSendGrid();
+            if (!sendGridInitialized) {
+              console.log('SendGrid not initialized - skipping email');
+              // Continue without sending email for now
+            } else {
+              const baseUrl = process.env.BASE_URL || 'http://localhost:3000';
+              const confirmationUrl = `${baseUrl}/api/auth/confirm-email?email=${encodeURIComponent(email)}`;
+              await sgMail.send({
+                to: email,
+                from: 'noreply@trailyo.com',
+                subject: 'Confirm your email',
+                text: 'Click the link to confirm your email!',
+                html: `
+                  <div style="background:#111;padding:32px 0;text-align:center;font-family:sans-serif;">
+                    <img src="${baseUrl}/Asset%2010newest.png" alt="Trailyo" style="height:48px;margin-bottom:24px;" />
+                    <h2 style="color:#fff;margin-bottom:16px;font-size:24px;">Confirm your email</h2>
+                    <p style="color:#ccc;margin-bottom:32px;font-size:16px;">
+                      Click the button below to verify your email and activate your account.
+                    </p>
+                    <a href="${confirmationUrl}" style="display:inline-block;padding:12px 32px;background:#fbbf24;color:#111;text-decoration:none;border-radius:6px;font-weight:bold;font-size:16px;">
+                      Confirm Email
+                    </a>
+                    <p style="color:#888;margin-top:32px;font-size:12px;">
+                      If you did not sign up for Trailyo, you can ignore this email.
+                    </p>
+                  </div>
+                `,
+              });
+              console.log('Email sent successfully to', email);
+              console.log('Email details - To:', email, 'From: noreply@trailyo.com', 'Subject: Confirm your email');
+              console.log('Confirmation URL:', confirmationUrl);
+            }
           } catch (e) {
             console.error('SendGrid error:', e);
             return NextResponse.json({ error: 'Failed to send confirmation email' }, { status: 500 });

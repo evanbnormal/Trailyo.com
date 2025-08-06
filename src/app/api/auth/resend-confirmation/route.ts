@@ -1,10 +1,14 @@
 import { NextRequest, NextResponse } from 'next/server';
 import sgMail from '@sendgrid/mail';
 
-// Debug log to confirm the API key is loaded
-console.log('SENDGRID_API_KEY:', process.env.SENDGRID_API_KEY ? 'Present' : 'Missing');
-
-sgMail.setApiKey(process.env.SENDGRID_API_KEY!);
+// Initialize SendGrid only if API key is available (runtime only)
+const initializeSendGrid = () => {
+  if (process.env.SENDGRID_API_KEY) {
+    sgMail.setApiKey(process.env.SENDGRID_API_KEY);
+    return true;
+  }
+  return false;
+};
 
 export async function POST(request: NextRequest) {
   try {
@@ -18,6 +22,12 @@ export async function POST(request: NextRequest) {
     }
     // Send confirmation email
     try {
+      const sendGridInitialized = initializeSendGrid();
+      if (!sendGridInitialized) {
+        console.log('SendGrid not initialized - skipping email');
+        return NextResponse.json({ success: true });
+      }
+      
       const baseUrl = process.env.BASE_URL || 'http://localhost:3000';
       const confirmationUrl = `${baseUrl}/api/auth/confirm-email?email=${encodeURIComponent(email)}`;
       console.log('Sending confirmation email to:', email);

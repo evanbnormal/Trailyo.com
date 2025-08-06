@@ -1,8 +1,14 @@
 import { NextRequest, NextResponse } from 'next/server';
 import sgMail from '@sendgrid/mail';
 
-// Set your SendGrid API key from environment variable
-sgMail.setApiKey(process.env.SENDGRID_API_KEY!);
+// Initialize SendGrid only if API key is available (runtime only)
+const initializeSendGrid = () => {
+  if (process.env.SENDGRID_API_KEY) {
+    sgMail.setApiKey(process.env.SENDGRID_API_KEY);
+    return true;
+  }
+  return false;
+};
 
 export async function POST(request: NextRequest) {
   try {
@@ -13,6 +19,20 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Email is required' }, { status: 400 });
     }
 
+    const sendGridInitialized = initializeSendGrid();
+    if (!sendGridInitialized) {
+      console.log('SendGrid not initialized - skipping email');
+      return NextResponse.json({ 
+        success: false, 
+        message: 'SendGrid not configured',
+        details: {
+          apiKeyExists: false,
+          apiKeyLength: 0,
+          fromEmail: 'noreply@trailyo.com'
+        }
+      });
+    }
+    
     console.log('=== SENDGRID TEST ===');
     console.log('SENDGRID_API_KEY exists:', !!process.env.SENDGRID_API_KEY);
     console.log('SENDGRID_API_KEY length:', process.env.SENDGRID_API_KEY?.length);
