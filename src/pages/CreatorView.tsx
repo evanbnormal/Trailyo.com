@@ -1008,10 +1008,10 @@ const CreatorView: React.FC = () => {
           // If trail has no steps, create initial steps
           console.log('🆕 Creating initial steps for existing trail with no steps');
           const initialStepId = `step-${Date.now()}`;
-          const initialSteps = [
-            { id: initialStepId, title: '', content: '', type: 'video', source: '', thumbnailUrl: '', isSaved: false, trail_id: trail.id, step_index: 0, created_at: new Date().toISOString() },
-            { id: 'reward', title: '', content: '', type: 'reward', source: '', thumbnailUrl: '', isSaved: false, trail_id: trail.id, step_index: 1, created_at: new Date().toISOString() }
-          ];
+                      const initialSteps = [
+              { id: initialStepId, title: '', content: '', type: 'video' as const, source: '', thumbnailUrl: '', isSaved: false, trail_id: trail.id, step_index: 0, created_at: new Date().toISOString() },
+              { id: 'reward', title: '', content: '', type: 'reward' as const, source: '', thumbnailUrl: '', isSaved: false, trail_id: trail.id, step_index: 1, created_at: new Date().toISOString() }
+            ];
           setSteps(initialSteps);
           setEditingStepId(initialStepId);
           setCurrentStepIndex(0);

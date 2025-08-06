@@ -134,8 +134,8 @@ export const trailService = {
     const trail: Trail = {
       ...trailData,
       id: `trail_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
-      created_at: new Date().toISOString(),
-      updated_at: new Date().toISOString(),
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
     };
 
     trails.push(trail);
@@ -148,8 +148,8 @@ export const trailService = {
   },
 
   async getPublishedTrails(): Promise<Trail[]> {
-    return trails.filter(t => t.is_published).sort((a, b) => 
-      new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+    return trails.filter(t => t.status === 'published').sort((a, b) => 
+      new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
     );
   },
 
@@ -160,7 +160,7 @@ export const trailService = {
     trails[index] = {
       ...trails[index],
       ...updates,
-      updated_at: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
     };
 
     saveToStorage();

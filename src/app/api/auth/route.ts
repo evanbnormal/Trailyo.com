@@ -169,8 +169,16 @@ export async function POST(request: NextRequest) {
 
 export async function GET(request: NextRequest) {
   try {
-    return NextResponse.json({ user: null });
+    const users = JSON.parse(localStorage.getItem('users') || '[]') as Array<{
+      id: string;
+      name: string;
+      email: string;
+      password: string;
+    }>;
+    
+    return NextResponse.json({ users });
   } catch (error) {
-    return NextResponse.json({ user: null });
+    console.error('Error fetching users:', error);
+    return NextResponse.json({ error: 'Failed to fetch users' }, { status: 500 });
   }
 } 

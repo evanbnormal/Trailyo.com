@@ -1,7 +1,25 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
 import bcrypt from 'bcryptjs';
-import { validateResetToken } from '../request-password-reset/route';
+
+// Helper function to validate reset token
+async function validateResetToken(token: string): Promise<{ email: string } | null> {
+  try {
+    const tokenData = await db.resetToken.findUnique({ where: { token } });
+    if (!tokenData) return null;
+    
+    if (tokenData.expires < new Date()) {
+      // Token has expired, delete it
+      await db.resetToken.delete({ where: { token } });
+      return null;
+    }
+    
+    return { email: tokenData.email };
+  } catch (error) {
+    console.error('Error validating reset token:', error);
+    return null;
+  }
+}
 
 export async function POST(request: NextRequest) {
   try {

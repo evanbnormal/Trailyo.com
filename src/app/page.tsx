@@ -17,11 +17,8 @@ import Settings from "@/pages/Settings";
 import ResetPassword from "@/pages/ResetPassword";
 import PublishConfirmation from "@/pages/PublishConfirmation";
 import TrailAnalytics from "@/pages/TrailAnalytics";
-import NotFound from "@/pages/NotFound";
 
-const queryClient = new QueryClient();
-
-// Dynamically import the app component with no SSR to avoid React Router issues
+// Dynamically import all components with no SSR to avoid React Router issues
 const AppComponent = dynamic(() => import('../components/AppComponent'), {
   ssr: false,
   loading: () => (
@@ -30,6 +27,8 @@ const AppComponent = dynamic(() => import('../components/AppComponent'), {
     </div>
   ),
 });
+
+const queryClient = new QueryClient();
 
 export default function App() {
   return (
@@ -52,8 +51,7 @@ export default function App() {
                 <Route path="/reset-password" element={<ResetPassword />} />
                 <Route path="/publish-confirmation" element={<PublishConfirmation />} />
                 <Route path="/trail-analytics/:trailId" element={<TrailAnalytics />} />
-                {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
-                <Route path="*" element={<NotFound />} />
+                {/* Removed NotFound route to prevent SSR issues */}
               </Routes>
             </div>
           </BrowserRouter>

@@ -14,7 +14,6 @@ import Profile from "@/pages/Profile";
 import Settings from "@/pages/Settings";
 import PublishConfirmation from "@/pages/PublishConfirmation";
 import TrailAnalytics from "@/pages/TrailAnalytics";
-import NotFound from "@/pages/NotFound";
 import ResetPassword from "@/pages/ResetPassword";
 
 const queryClient = new QueryClient();
@@ -40,8 +39,7 @@ export default function AppComponent() {
                 <Route path="/reset-password" element={<ResetPassword />} />
                 <Route path="/publish-confirmation" element={<PublishConfirmation />} />
                 <Route path="/trail-analytics/:trailId" element={<TrailAnalytics />} />
-                {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
-                <Route path="*" element={<NotFound />} />
+                {/* Removed NotFound route to prevent SSR issues */}
               </Routes>
             </div>
           </BrowserRouter>

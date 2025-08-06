@@ -132,7 +132,7 @@ export async function POST(request: NextRequest) {
 }
 
 // Helper function to validate reset token (export for use in other endpoints)
-export async function validateResetToken(token: string): Promise<{ email: string } | null> {
+async function validateResetToken(token: string): Promise<{ email: string } | null> {
   try {
     const tokenData = await db.resetToken.findUnique({ where: { token } });
     if (!tokenData) return null;

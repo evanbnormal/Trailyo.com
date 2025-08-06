@@ -74,9 +74,9 @@ export async function POST(request: NextRequest): Promise<NextResponse<SecureVer
       });
 
       const matchingSetupIntent = setupIntents.data.find(si => 
-        si.metadata.sessionId === sessionId && 
-        si.metadata.userId === userId &&
-        si.metadata.secure_flow === 'true'
+        si.metadata?.sessionId === sessionId && 
+        si.metadata?.userId === userId &&
+        si.metadata?.secure_flow === 'true'
       );
 
       if (!matchingSetupIntent) {

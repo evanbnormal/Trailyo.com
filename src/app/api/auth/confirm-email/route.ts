@@ -99,19 +99,19 @@ export async function GET(request: NextRequest) {
       }
     }
 
-    return NextResponse.json({ error: 'Invalid confirmation request' }, { status: 400 });
-
+    return NextResponse.json({ error: 'Invalid request' }, { status: 400 });
   } catch (error) {
-    console.error('Email confirmation error:', error);
+    console.error('Error during email confirmation:', error);
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
 }
 
-// Helper function to generate confirmation token (export for use in other endpoints)
-export function generateConfirmationToken(email: string): string {
+// Helper function (not exported as it's not a valid route export)
+function generateConfirmationToken(email: string): string {
   const token = Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15);
-  const expires = Date.now() + 24 * 60 * 60 * 1000; // 24 hours
+  const expires = Date.now() + (24 * 60 * 60 * 1000); // 24 hours
   
   confirmationTokens.set(token, { email, expires });
+  
   return token;
 } 

@@ -289,7 +289,7 @@ async function handleSetupIntentSucceeded(setupIntent: Stripe.SetupIntent) {
   console.log(`🔍 Setup intent metadata:`, setupIntent.metadata);
   
   // If this setup intent has subscription metadata, create the subscription
-  if (setupIntent.metadata.subscription_type === 'creator') {
+  if (setupIntent.metadata?.subscription_type === 'creator') {
     console.log(`🎯 Creating subscription for setup intent: ${setupIntent.id}`);
     
     const customerId = setupIntent.customer as string;

@@ -6,216 +6,209 @@ export async function GET(request: NextRequest) {
     const { searchParams } = new URL(request.url);
     const trailId = searchParams.get('trailId');
 
-    if (trailId) {
-      // Get events from database
-      const events = await db.trailAnalyticsEvent.findMany({
-        where: { trailId },
-        orderBy: { timestamp: 'asc' }
-      });
-      
-      // Convert database events to the expected format
-      const formattedEvents = events.map(event => ({
-        trailId: event.trailId,
-        eventType: event.eventType,
-        data: event.data,
-        timestamp: event.timestamp.getTime()
-      }));
-      
-      // Calculate analytics from events
-      const analytics = calculateAnalyticsFromEvents(trailId, formattedEvents);
-      
-      return NextResponse.json(analytics);
+    if (!trailId) {
+      return NextResponse.json({ error: 'Trail ID is required' }, { status: 400 });
     }
 
-    // Return all analytics if no trailId specified
-    const allEvents = await db.trailAnalyticsEvent.findMany({
-      orderBy: { timestamp: 'asc' }
+    console.log('📊 Calculating analytics for trail:', trailId);
+
+    // Get all events for this trail
+    const events = await db.trailAnalyticsEvent.findMany({
+      where: { trailId },
+      orderBy: { timestamp: 'asc' },
     });
-    
-    const allAnalytics: Record<string, any> = {};
-    const eventsByTrail = new Map<string, any[]>();
-    
-    // Group events by trailId
-    allEvents.forEach(event => {
-      const formattedEvent = {
-        trailId: event.trailId,
-        eventType: event.eventType,
-        data: event.data,
-        timestamp: event.timestamp.getTime()
-      };
-      
-      if (!eventsByTrail.has(event.trailId)) {
-        eventsByTrail.set(event.trailId, []);
-      }
-      eventsByTrail.get(event.trailId)!.push(formattedEvent);
-    });
-    
-    for (const [trailId, events] of eventsByTrail.entries()) {
-      allAnalytics[trailId] = calculateAnalyticsFromEvents(trailId, events);
+
+    console.log('📊 Total events:', events.length);
+    console.log('📊 Event types:', events.map(e => e.eventType));
+
+    if (events.length === 0) {
+      return NextResponse.json({
+        totalLearners: 0,
+        totalRevenue: 0,
+        totalWatchTime: 0,
+        completionRate: 0,
+        retentionRate: 0,
+        revenueByStep: [],
+        events: []
+      });
     }
-    
-    return NextResponse.json(allAnalytics);
+
+    // Calculate analytics from events
+    const analytics = calculateAnalyticsFromEvents(events.map(event => ({
+      trailId: event.trailId,
+      eventType: event.eventType,
+      data: event.data as Record<string, unknown>,
+      timestamp: event.timestamp
+    })));
+
+    return NextResponse.json(analytics);
   } catch (error) {
-    console.error('Error fetching analytics:', error);
-    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
+    console.error('Error calculating analytics:', error);
+    return NextResponse.json({ error: 'Failed to calculate analytics' }, { status: 500 });
   }
 }
 
-export async function POST(request: NextRequest) {
+export async function POST(request: Request) {
   try {
-    console.log('📥 Analytics API received POST request');
     const body = await request.json();
-    const { trailId, eventType, data, action } = body;
-    console.log('📥 Request body:', { trailId, eventType, action });
+    const { trailId, eventType, action } = body;
 
-    // Handle reset action
-    if (action === 'reset') {
-      await db.trailAnalyticsEvent.deleteMany({});
-      console.log('Analytics data reset');
-      return NextResponse.json({ success: true, message: 'Analytics reset' });
-    }
+    console.log('📥 Analytics API received POST request');
+    console.log('📥 Request body:', { trailId, eventType, action });
 
     if (!trailId || !eventType) {
       return NextResponse.json({ error: 'Missing required fields' }, { status: 400 });
     }
 
-    // Store the event in database
-    await db.trailAnalyticsEvent.create({
-      data: {
-        trailId,
-        eventType,
-        data,
-        timestamp: new Date()
-      }
+    // Create analytics event
+    const analyticsEvent = {
+      trailId,
+      eventType,
+      data: action || {},
+      timestamp: new Date(),
+    };
+
+    // Store in database
+    const storedEvent = await db.trailAnalyticsEvent.create({
+      data: analyticsEvent,
     });
 
-    console.log('📊 Analytics event stored in database:', { trailId, eventType, data });
+    console.log('📊 Analytics event stored in database:', storedEvent);
 
-    return NextResponse.json({ success: true });
+    return NextResponse.json({ success: true, event: storedEvent });
   } catch (error) {
-    console.error('Error recording analytics event:', error);
-    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
+    console.error('Error storing analytics event:', error);
+    return NextResponse.json({ error: 'Failed to store analytics event' }, { status: 500 });
   }
 }
 
-function calculateAnalyticsFromEvents(trailId: string, events: any[]) {
-  // REAL DATA CALCULATIONS - No more sample data
-  
-  console.log('📊 Calculating analytics for trail:', trailId);
-  console.log('📊 Total events:', events.length);
-  console.log('📊 Event types:', events.map(e => e.eventType));
-  
+function calculateAnalyticsFromEvents(events: Array<{
+  trailId: string;
+  eventType: string;
+  data: Record<string, unknown>;
+  timestamp: Date;
+}>) {
   // 1. TOTAL LEARNERS: Count unique active learners (people who take action)
   const trailViews = events.filter(e => e.eventType === 'trail_view');
   const videoWatches = events.filter(e => e.eventType === 'video_watch');
   const stepSkips = events.filter(e => e.eventType === 'step_skip');
   const tips = events.filter(e => e.eventType === 'tip_donated');
   const stepCompletions = events.filter(e => e.eventType === 'step_complete');
-  
-  // Count people who have taken action (watched video, skipped step, tipped, or completed step)
-  // Only count trail views that have associated action events
+
   const activeSessionIds = new Set();
-  
-  // Add session IDs from trail views that have associated actions
   trailViews.forEach(trailView => {
-    const sessionId = trailView.data.sessionId;
+    const sessionId = trailView.data.sessionId as string;
     if (sessionId) {
-      // Check if this session has any action events (video watch, skip, tip, complete)
       const hasActions = videoWatches.some(e => e.data.sessionId === sessionId) ||
                        stepSkips.some(e => e.data.sessionId === sessionId) ||
                        tips.some(e => e.data.sessionId === sessionId) ||
                        stepCompletions.some(e => e.data.sessionId === sessionId);
-      
       if (hasActions) {
         activeSessionIds.add(sessionId);
       }
     }
   });
-  
-  // Also add any action events that don't have session IDs (fallback)
   if (videoWatches.length > 0 || stepSkips.length > 0 || tips.length > 0 || stepCompletions.length > 0) {
-    // If we have action events, count at least 1 learner
     activeSessionIds.add('active_learner');
   }
-  
+  const totalLearners = activeSessionIds.size;
+
   console.log('📊 Trail views found:', trailViews.length);
   console.log('📊 Active session IDs:', Array.from(activeSessionIds));
-  
-  // Count unique active learners (people who take action)
-  const totalLearners = activeSessionIds.size;
   console.log('📊 Total active learners calculated:', totalLearners);
-  
-  // 2. REVENUE: All cash from Stripe payments (skip payments + tips)
-  const skipRevenue = stepSkips.reduce((total, event) => total + (event.data.skipCost || 0), 0);
-  const tipRevenue = tips.reduce((total, event) => total + (event.data.tipAmount || 0), 0);
-  const totalRevenue = skipRevenue + tipRevenue;
-  
-  // 3. TIPS: Only tip payments
-  const totalTips = tipRevenue;
-  
-  // 4. COMPLETION RATE: People who reach the reward vs total learners
-  // A trail is completed when someone reaches the final step (reward)
-  const finalStepCompletions = stepCompletions.filter(e => e.data.stepIndex === 1); // Reward step (index 1)
-  const completionRate = totalLearners > 0 ? (finalStepCompletions.length / totalLearners) * 100 : 0;
-  
-  // Calculate total learners over time (cumulative unique viewers like YouTube)
-  const learnersOverTime = new Map<string, number>();
-  const learnersByDay = new Map<string, number>();
-  let cumulativeLearners = 0;
-  
-  // Sort trail views by timestamp to calculate cumulative
-  const sortedTrailViews = trailViews.sort((a, b) => a.timestamp - b.timestamp);
-  
-  sortedTrailViews.forEach(event => {
-    const date = new Date(event.timestamp);
-    const monthKey = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
-    const dayKey = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
-    cumulativeLearners += 1;
-    learnersOverTime.set(monthKey, cumulativeLearners);
-    learnersByDay.set(dayKey, (learnersByDay.get(dayKey) || 0) + 1);
+
+  // 2. REVENUE CALCULATION
+  const revenueEvents = events.filter(e => e.eventType === 'tip_donated' || e.eventType === 'step_skip');
+  const totalRevenue = revenueEvents.reduce((sum, event) => {
+    if (event.eventType === 'tip_donated') {
+      return sum + ((event.data.tipAmount as number) || 0);
+    } else if (event.eventType === 'step_skip') {
+      return sum + ((event.data.skipAmount as number) || 0);
+    }
+    return sum;
+  }, 0);
+
+  // Revenue by step
+  const revenueByStep = trailViews[0]?.data?.trailTitle ? Array(3).fill(0).map((_, index) => ({
+    step: index,
+    title: index === 0 ? 'Step 1' : index === 1 ? 'Reward' : 'Step 2',
+    revenue: 0
+  })) : [];
+
+  // Attribute revenue to steps
+  revenueEvents.forEach(event => {
+    if (event.eventType === 'tip_donated') {
+      // Tips go to the reward step (index 1)
+      if (revenueByStep[1]) {
+        revenueByStep[1].revenue += (event.data.tipAmount as number) || 0;
+      }
+    } else if (event.eventType === 'step_skip') {
+      // Skip payments go to the skipped step
+      const stepIndex = (event.data.stepIndex as number) || 0;
+      if (revenueByStep[stepIndex]) {
+        revenueByStep[stepIndex].revenue += (event.data.skipAmount as number) || 0;
+      }
+    }
   });
-  
-  const learnersOverTimeArray = Array.from(learnersOverTime.entries())
-    .sort(([a], [b]) => a.localeCompare(b))
-    .map(([date, learners]) => ({ date, learners }));
-  
-  const learnersByDayArray = Array.from(learnersByDay.entries())
-    .sort(([a], [b]) => a.localeCompare(b))
-    .map(([date, learners]) => ({ date, learners }));
-  
-  // Calculate completion rate over time (percentage of learners who reach reward)
-  const monthlyCompletions = new Map<string, number>();
-  const monthlyLearners = new Map<string, number>();
+
+  // 3. WATCH TIME CALCULATION
+  const totalWatchTime = videoWatches.reduce((sum, event) => {
+    return sum + ((event.data.watchTime as number) || 0);
+  }, 0);
+
+  // 4. COMPLETION RATE
+  const finalStepCompletions = stepCompletions.filter(e => (e.data.stepIndex as number) === 2); // Assuming 3 steps (0, 1, 2)
+  const completionRate = totalLearners > 0 ? (finalStepCompletions.length / totalLearners) * 100 : 0;
+
+  // 5. RETENTION RATE (how many people reached each step)
+  const stepReachCounts = [0, 0, 0]; // For 3 steps
+  stepCompletions.forEach(event => {
+    const stepIndex = event.data.stepIndex as number;
+    if (stepIndex >= 0 && stepIndex < stepReachCounts.length) {
+      stepReachCounts[stepIndex]++;
+    }
+  });
+
+  const retentionRate = stepReachCounts.map((count, index) => ({
+    step: index,
+    learnersReached: count,
+    retentionRate: totalLearners > 0 ? (count / totalLearners) * 100 : 0
+  }));
+
+  // 6. DAILY AGGREGATION
   const dailyCompletions = new Map<string, number>();
   const dailyLearners = new Map<string, number>();
-  
-  // Count final step completions by month and day
-  finalStepCompletions.forEach(event => {
-    const date = new Date(event.timestamp);
-    const monthKey = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
+  const watchTimeByDay = new Map<string, number>();
+  const revenueByDay = new Map<string, number>();
+
+  // Sort events by timestamp
+  const sortedEvents = events.sort((a, b) => a.timestamp.getTime() - b.timestamp.getTime());
+  const sortedVideoWatches = videoWatches.sort((a, b) => a.timestamp.getTime() - b.timestamp.getTime());
+  const sortedRevenueEvents = revenueEvents.sort((a, b) => a.timestamp.getTime() - b.timestamp.getTime());
+
+  // Calculate daily completions
+  stepCompletions.forEach(event => {
+    const date = event.timestamp;
     const dayKey = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
-    monthlyCompletions.set(monthKey, (monthlyCompletions.get(monthKey) || 0) + 1);
     dailyCompletions.set(dayKey, (dailyCompletions.get(dayKey) || 0) + 1);
   });
-  
-  // Count total learners by month and day
+
+  // Calculate daily learners (unique session IDs per day)
+  const learnersByDay = new Map<string, Set<string>>();
   trailViews.forEach(event => {
-    const date = new Date(event.timestamp);
-    const monthKey = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
+    const date = event.timestamp;
     const dayKey = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
-    monthlyLearners.set(monthKey, (monthlyLearners.get(monthKey) || 0) + 1);
-    dailyLearners.set(dayKey, (dailyLearners.get(dayKey) || 0) + 1);
+    if (!learnersByDay.has(dayKey)) {
+      learnersByDay.set(dayKey, new Set());
+    }
+    const sessionId = (event.data.sessionId as string) || 'anonymous';
+    learnersByDay.get(dayKey)?.add(sessionId);
   });
-  
-  // Calculate completion rate over time (percentage) - monthly
-  const completionRateOverTime = Array.from(monthlyCompletions.entries())
+
+  const learnersByDayArray = Array.from(learnersByDay.entries())
     .sort(([a], [b]) => a.localeCompare(b))
-    .map(([date, completions]) => {
-      const totalLearners = monthlyLearners.get(date) || 0;
-      const completionRate = totalLearners > 0 ? (completions / totalLearners) * 100 : 0;
-      return { date, completionRate };
-    });
-  
+    .map(([date, sessionIds]) => ({ date, learners: sessionIds.size }));
+
   // Calculate completion rate by day
   const completionRateByDay = Array.from(dailyCompletions.entries())
     .sort(([a], [b]) => a.localeCompare(b))
@@ -224,184 +217,41 @@ function calculateAnalyticsFromEvents(trailId: string, events: any[]) {
       const completionRate = totalLearners > 0 ? (completions / totalLearners) * 100 : 0;
       return { date, completionRate };
     });
-  
-  // 5. WATCH TIME: Total minutes watched across all videos
-  // Use actual watch time in minutes (no conversion needed)
-  const totalWatchTime = videoWatches.reduce((total, event) => {
-    const watchTimeMinutes = event.data.watchTime || 0;
-    return total + watchTimeMinutes;
-  }, 0);
-  
-  // Calculate watch time over time (cumulative like YouTube)
-  const watchTimeOverTime = new Map<string, number>();
-  const watchTimeByDay = new Map<string, number>();
-  let cumulativeWatchTime = 0;
-  
-  // Sort video watches by timestamp to calculate cumulative
-  const sortedVideoWatches = videoWatches.sort((a, b) => a.timestamp - b.timestamp);
-  
+
+  // Calculate watch time by day
   sortedVideoWatches.forEach(event => {
-    const date = new Date(event.timestamp);
-    const monthKey = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
+    const date = event.timestamp;
     const dayKey = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
-    const watchTimeMinutes = event.data.watchTime || 0;
-    cumulativeWatchTime += watchTimeMinutes;
-    watchTimeOverTime.set(monthKey, cumulativeWatchTime);
-    watchTimeByDay.set(dayKey, (watchTimeByDay.get(dayKey) || 0) + watchTimeMinutes);
+    watchTimeByDay.set(dayKey, (watchTimeByDay.get(dayKey) || 0) + ((event.data.watchTime as number) || 0));
   });
-  
-  const watchTimeOverTimeArray = Array.from(watchTimeOverTime.entries())
-    .sort(([a], [b]) => a.localeCompare(b))
-    .map(([date, watchTime]) => ({ date, watchTime }));
-  
   const watchTimeByDayArray = Array.from(watchTimeByDay.entries())
     .sort(([a], [b]) => a.localeCompare(b))
     .map(([date, watchTime]) => ({ date, watchTime }));
-  
-  // 6. RETENTION RATE: Percentage of learners who reach each step
-  // Define step indices for consistent step tracking
-  const allStepIndices = [0, 1]; // Step 0 and Step 1 (Reward)
-  
-  // Calculate step retention (percentage of learners who reach each step)
-  const stepRetention = allStepIndices.map((stepIndex) => {
-    if (stepIndex === 0) {
-      // Step 1: All learners start here, so 100% retention
-      return {
-        stepIndex,
-        stepTitle: `Step ${stepIndex + 1}`,
-        learnersReached: totalLearners,
-        retentionRate: 100
-      };
-    } else {
-      // For step 1 (Reward): count learners who completed this step
-      const stepCompletionsForStep = stepCompletions.filter(e => e.data.stepIndex === stepIndex);
-      const learnersReached = stepCompletionsForStep.length;
-      
-      const retentionRate = totalLearners > 0 ? (learnersReached / totalLearners) * 100 : 0;
-      
-      return {
-        stepIndex,
-        stepTitle: 'Reward',
-        learnersReached,
-        retentionRate
-      };
-    }
-  });
-  
-  // Calculate video watch time by step
-  const videoWatchTime = allStepIndices.map((stepIndex) => {
-    const stepVideoWatches = videoWatches.filter(v => v.data.stepIndex === stepIndex);
-    const totalWatchTime = stepVideoWatches.reduce((total, event) => {
-      const watchTimeMinutes = event.data.watchTime || 0;
-      return total + watchTimeMinutes;
-    }, 0);
-    
-    const stepTitle = stepIndex === 1 ? 'Reward' : `Step ${stepIndex + 1}`;
-    
-    return {
-      stepIndex,
-      stepTitle,
-      totalWatchTime,
-      uniqueViewers: stepVideoWatches.length
-    };
-  });
-  
-  // Calculate revenue by step - include tips in the reward step
-  const revenueByStep = allStepIndices.map((stepIndex) => {
-    // Skip payments should only be attributed to the step that was skipped
-    const stepSkips = events.filter(e => e.eventType === 'step_skip' && e.data.stepIndex === stepIndex);
-    const skipRevenue = stepSkips.reduce((total, event) => total + (event.data.skipCost || 0), 0);
-    
-    // Tips should be attributed to the reward step (step 1)
-    const tipRevenue = stepIndex === 1 ? totalTips : 0;
-    
-    const stepTitle = stepIndex === 1 ? 'Reward' : `Step ${stepIndex + 1}`;
-    
-    return {
-      stepIndex,
-      stepTitle,
-      skipRevenue,
-      tipRevenue,
-      totalRevenue: skipRevenue + tipRevenue
-    };
-  });
 
-  // Calculate tips analytics
-  const tipEvents = events.filter(e => e.eventType === 'tip_donated');
-  const usersWhoTipped = new Set(tipEvents.map(e => e.data.sessionId || e.data.userId)).size;
-  const tipProportion = totalLearners > 0 ? (usersWhoTipped / totalLearners) * 100 : 0;
-  
-  // Revenue over time (cumulative like YouTube)
-  const revenueOverTime = new Map<string, number>();
-  const revenueByDay = new Map<string, number>();
-  let cumulativeRevenue = 0;
-  
-  // Combine all revenue events (skip payments + tips)
-  const allRevenueEvents = [
-    ...stepSkips.map(event => ({ ...event, amount: event.data.skipCost || 0 })),
-    ...tipEvents.map(event => ({ ...event, amount: event.data.tipAmount || 0 }))
-  ];
-  
-  // Sort revenue events by timestamp to calculate cumulative
-  const sortedRevenueEvents = allRevenueEvents.sort((a, b) => a.timestamp - b.timestamp);
-  
+  // Calculate revenue by day
   sortedRevenueEvents.forEach(event => {
-    const date = new Date(event.timestamp);
-    const monthKey = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
+    const date = event.timestamp;
     const dayKey = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
-    cumulativeRevenue += event.amount;
-    revenueOverTime.set(monthKey, cumulativeRevenue);
-    revenueByDay.set(dayKey, (revenueByDay.get(dayKey) || 0) + event.amount);
+    const amount = event.eventType === 'tip_donated' ? 
+      ((event.data.tipAmount as number) || 0) : 
+      ((event.data.skipAmount as number) || 0);
+    revenueByDay.set(dayKey, (revenueByDay.get(dayKey) || 0) + amount);
   });
-  
-  const revenueOverTimeArray = Array.from(revenueOverTime.entries())
-    .sort(([a], [b]) => a.localeCompare(b))
-    .map(([date, revenue]) => ({ date, revenue }));
-    
   const revenueByDayArray = Array.from(revenueByDay.entries())
     .sort(([a], [b]) => a.localeCompare(b))
     .map(([date, revenue]) => ({ date, revenue }));
-  
-  // Tips over time (cumulative)
-  const tipsOverTime = new Map<string, number>();
-  let cumulativeTips = 0;
-  
-  // Sort tip events by timestamp to calculate cumulative
-  const sortedTipEvents = tipEvents.sort((a, b) => a.timestamp - b.timestamp);
-  
-  sortedTipEvents.forEach(event => {
-    const date = new Date(event.timestamp);
-    const monthKey = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
-    cumulativeTips += (event.data.tipAmount || 0);
-    tipsOverTime.set(monthKey, cumulativeTips);
-  });
-  
-  const tipsOverTimeArray = Array.from(tipsOverTime.entries())
-    .sort(([a], [b]) => a.localeCompare(b))
-    .map(([date, amount]) => ({ date, amount }));
 
-  // Return REAL data only - no sample data
   return {
-    trailId,
-    totalLearners: totalLearners, // Total unique trail views
-    totalRevenue: totalRevenue,
-    totalTips: totalTips,
-    completionRate: completionRate, // Percentage who reach reward
-    completionRateOverTime: completionRateOverTime, // Completion rate over time
-    completionRateByDay: completionRateByDay, // Completion rate by day
-    totalWatchTime: totalWatchTime,
-    stepRetention: stepRetention, // Percentage who reach each step
-    videoWatchTime: videoWatchTime,
-    revenueByStep: revenueByStep,
-    revenueOverTime: revenueOverTimeArray, // Cumulative revenue over time
-    revenueByDay: revenueByDayArray, // Revenue by day
-    tipsOverTime: tipsOverTimeArray, // Cumulative tips over time
-    tipProportion: tipProportion,
-    usersWhoTipped: usersWhoTipped,
-    watchTimeOverTime: watchTimeOverTimeArray, // Cumulative watch time over time
-    watchTimeByDay: watchTimeByDayArray, // Watch time by day
-    learnersOverTime: learnersOverTimeArray, // Cumulative learners over time
-    learnersByDay: learnersByDayArray, // Learners by day
+    totalLearners,
+    totalRevenue,
+    totalWatchTime,
+    completionRate,
+    retentionRate,
+    revenueByStep,
+    completionRateByDay: completionRateByDay,
+    watchTimeByDay: watchTimeByDayArray,
+    learnersByDay: learnersByDayArray,
+    revenueByDay: revenueByDayArray,
     events
   };
 }

@@ -41,7 +41,7 @@ export async function GET(request: NextRequest) {
       brand: pm.card?.brand || '',
       expMonth: pm.card?.exp_month || 0,
       expYear: pm.card?.exp_year || 0,
-      isDefault: pm.metadata.isDefault === 'true',
+      isDefault: pm.metadata?.isDefault === 'true',
     }));
 
     return NextResponse.json({ 

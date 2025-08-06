@@ -124,10 +124,10 @@ export const useSubscription = () => {
     async function loadFreshData(): Promise<SubscriptionStatus> {
       globalLoadingPromise = (async () => {
         try {
-          console.log(`🔄 Loading fresh subscription status for user: ${user.id}`);
+          console.log(`🔄 Loading fresh subscription status for user: ${user?.id}`);
           setIsLoading(true);
           
-          const status = await SubscriptionService.getSubscriptionStatus(user.id, user.email);
+          const status = await SubscriptionService.getSubscriptionStatus(user?.id || '', user?.email || '');
           
           console.log(`📥 Received subscription status from API:`, status);
           

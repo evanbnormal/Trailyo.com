@@ -10,34 +10,45 @@ import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { Select, SelectTrigger, SelectContent, SelectItem, SelectValue } from "@/components/ui/select";
 import { analyticsService, TrailAnalytics as RealTrailAnalytics } from '@/lib/analytics';
 import { Trail, TrailStep } from '@/lib/data';
+import { useToast } from "@/components/ui/use-toast";
 
 interface AnalyticsData {
-  revenue: number;
-  tips: number;
-  totalLearners: number; // Single number, not broken down by step
+  totalLearners: number;
+  totalRevenue: number;
+  totalWatchTime: number;
   completionRate: number;
-  completionRateOverTime: Array<{ date: string; completionRate: number }>; // Completion rate over time
-  dropOffData: Array<{
+  retentionRate: Array<{
     step: number;
-    stepTitle: string;
     learnersReached: number;
-    learnersCompleted: number;
     retentionRate: number;
   }>;
-  revenueOverTime: Array<{
+  revenueByStep: Array<{
+    step: number;
+    title: string;
+    revenue: number;
+  }>;
+  completionRateByDay: Array<{
+    date: string;
+    completionRate: number;
+  }>;
+  watchTimeByDay: Array<{
+    date: string;
+    watchTime: number;
+  }>;
+  learnersByDay: Array<{
+    date: string;
+    learners: number;
+  }>;
+  revenueByDay: Array<{
     date: string;
     revenue: number;
   }>;
-  revenueByWeek: Array<{ week: string; revenue: number; month: string }>;
-  revenueByDay: Array<{ day: string; revenue: number; weekDate: string }>;
-  totalWatchTime: number; // in minutes
-  watchTimePerStep: Array<{ stepTitle: string; watchTime: number }>; // in minutes
-  revenueByStep: Array<{ stepTitle: string; revenue: number }>;
-  learnersByStep: Array<{ stepTitle: string; learners: number }>;
-  dropOffOverTime: Array<{ date: string; dropOff: number }>;
-  dropOffByTime: Array<{ time: string; learners: number }>;
-  watchTimeByTime: Array<{ time: string; watchTime: number }>;
-  watchTimeOverTime: Array<{ date: string; watchTime: number }>;
+  events: Array<{
+    trailId: string;
+    eventType: string;
+    data: Record<string, unknown>;
+    timestamp: number;
+  }>;
 }
 
 type ActiveMetric = 'revenue' | 'tips' | 'learners' | 'completion' | 'dropoff' | 'watchtime';
@@ -187,6 +198,7 @@ const TrailAnalytics: React.FC = () => {
   const { trailId } = useParams<{ trailId: string }>();
   const navigate = useNavigate();
   const { getUserTrails } = useAuth();
+  const { toast } = useToast();
   
   const [trail, setTrail] = useState<Trail | null>(null);
   const [analytics, setAnalytics] = useState<AnalyticsData | null>(null);
@@ -205,6 +217,7 @@ const TrailAnalytics: React.FC = () => {
   const [selectedYear, setSelectedYear] = useState(new Date().getFullYear().toString());
   const [selectedMonth, setSelectedMonth] = useState(String(new Date().getMonth() + 1).padStart(2, '0'));
   const [selectedWeek, setSelectedWeek] = useState('WEEK 1');
+  const [error, setError] = useState<string | null>(null);
 
   // Check screen size for responsive behavior
   useEffect(() => {
@@ -255,96 +268,61 @@ const TrailAnalytics: React.FC = () => {
             setRealAnalytics(realAnalyticsData);
             // Convert real analytics to the expected format
             const analyticsData: AnalyticsData = {
-            revenue: realAnalyticsData.totalRevenue,
-            tips: realAnalyticsData.totalTips,
-            totalLearners: realAnalyticsData.totalLearners,
-            completionRate: realAnalyticsData.completionRate,
-            completionRateOverTime: realAnalyticsData.completionRateOverTime || [],
-            dropOffData: foundTrail.steps.map((step, index) => {
-              const stepRetention = realAnalyticsData.stepRetention.find(s => s.stepIndex === index);
-              return {
-                step: index + 1,
-                stepTitle: step.title,
-                learnersReached: stepRetention?.learnersReached || 0,
-                learnersCompleted: stepRetention?.learnersReached || 0,
-                retentionRate: stepRetention?.retentionRate || 0
-              };
-            }),
-            revenueOverTime: realAnalyticsData.revenueOverTime || [],
-            revenueByWeek: generateRevenueByWeek(realAnalyticsData.events),
-            revenueByDay: generateRevenueByDay(realAnalyticsData.events),
-            totalWatchTime: realAnalyticsData.totalWatchTime,
-            watchTimePerStep: foundTrail.steps.map((step, idx) => {
-              const videoWatchTime = realAnalyticsData.videoWatchTime.find(s => s.stepIndex === idx);
-              return {
-                stepTitle: step.title,
-                watchTime: videoWatchTime?.totalWatchTime || 0
-              };
-            }),
-            revenueByStep: foundTrail.steps.map((step, idx) => {
-              const revenueByStep = realAnalyticsData.revenueByStep.find(s => s.stepIndex === idx);
-              return {
-                stepTitle: step.title,
-                revenue: (revenueByStep?.skipRevenue || 0) + (revenueByStep?.tipRevenue || 0)
-              };
-            }),
-            learnersByStep: [], // Total learners is not broken down by step
-            dropOffOverTime: generateDropOffOverTime(realAnalyticsData.events),
-            dropOffByTime: generateDropOffByTime(realAnalyticsData.events, realAnalyticsData.totalLearners),
-            watchTimeByTime: generateWatchTimeByTime(realAnalyticsData.events, realAnalyticsData.totalWatchTime),
-            watchTimeOverTime: generateWatchTimeOverTime(realAnalyticsData.events),
-          };
+              totalLearners: realAnalyticsData.totalLearners,
+              totalRevenue: realAnalyticsData.totalRevenue,
+              totalWatchTime: realAnalyticsData.totalWatchTime,
+              completionRate: realAnalyticsData.completionRate,
+              retentionRate: (realAnalyticsData as any).retentionRate || [],
+              revenueByStep: (realAnalyticsData as any).revenueByStep?.map((s: any) => ({
+                step: s.step,
+                title: s.title,
+                revenue: s.revenue
+              })) || [],
+              completionRateByDay: (realAnalyticsData as any).completionRateByDay || [],
+              watchTimeByDay: (realAnalyticsData as any).watchTimeByDay || [],
+              learnersByDay: (realAnalyticsData as any).learnersByDay || [],
+              revenueByDay: (realAnalyticsData as any).revenueByDay || [],
+              events: realAnalyticsData.events || [],
+            };
+            
+            setAnalytics(analyticsData);
+          } else {
+            // No real analytics data yet, use empty data
+            const emptyAnalytics: AnalyticsData = {
+              totalLearners: 0,
+              totalRevenue: 0,
+              totalWatchTime: 0,
+              completionRate: 0,
+              retentionRate: [],
+              revenueByStep: [],
+              completionRateByDay: [],
+              watchTimeByDay: [],
+              learnersByDay: [],
+              revenueByDay: [],
+              events: [],
+            };
+            setAnalytics(emptyAnalytics);
+          }
           
-          setAnalytics(analyticsData);
+          setLoading(false);
         } else {
-          // No real analytics data yet, use empty data
-          const emptyAnalytics: AnalyticsData = {
-            revenue: 0,
-            tips: 0,
-            totalLearners: 0,
-            completionRate: 0,
-            completionRateOverTime: [],
-            dropOffData: foundTrail.steps.map((step, index) => ({
-              step: index + 1,
-              stepTitle: step.title,
-              learnersReached: 0,
-              learnersCompleted: 0,
-              retentionRate: 0
-            })),
-            revenueOverTime: [],
-            revenueByWeek: [],
-            revenueByDay: [],
-            totalWatchTime: 0,
-            watchTimePerStep: foundTrail.steps.map(step => ({
-              stepTitle: step.title,
-              watchTime: 0
-            })),
-            revenueByStep: foundTrail.steps.map(step => ({
-              stepTitle: step.title,
-              revenue: 0
-            })),
-            learnersByStep: [], // Total learners is not broken down by step
-            dropOffOverTime: [],
-            dropOffByTime: [],
-            watchTimeByTime: [],
-            watchTimeOverTime: []
-          };
-          setAnalytics(emptyAnalytics);
+          // Trail not found, navigate to profile
+          navigate('/profile');
         }
-        
+      } catch (error) {
+        console.error('Error loading trail and analytics:', error);
         setLoading(false);
-      } else {
-        // Trail not found, navigate to profile
-        navigate('/profile');
+        setError('Failed to load analytics data. Please try again.');
+        toast({
+          title: 'Error',
+          description: 'Failed to load analytics data. Please try again.',
+          variant: 'destructive',
+        });
       }
-    } catch (error) {
-      console.error('Error loading trail and analytics:', error);
-      setLoading(false);
-    }
-  };
+    };
 
-  loadTrailAndAnalytics();
-}, [trailId, getUserTrails, navigate]);
+    loadTrailAndAnalytics();
+  }, [trailId, getUserTrails, navigate, toast]);
 
   const handleResetAnalytics = async () => {
     try {
@@ -353,6 +331,12 @@ const TrailAnalytics: React.FC = () => {
       window.location.reload();
     } catch (error) {
       console.error('Error resetting analytics:', error);
+      setError('Failed to reset analytics. Please try again.');
+      toast({
+        title: 'Error',
+        description: 'Failed to reset analytics. Please try again.',
+        variant: 'destructive',
+      });
     }
   };
 
@@ -363,51 +347,35 @@ const TrailAnalytics: React.FC = () => {
       const realAnalyticsData = await analyticsService.getTrailAnalytics(trailId!);
       if (realAnalyticsData && trail) {
         setRealAnalytics(realAnalyticsData);
-        // Convert real analytics to the expected format
-        const analyticsData: AnalyticsData = {
-          revenue: realAnalyticsData.totalRevenue,
-          tips: realAnalyticsData.totalTips,
-          totalLearners: realAnalyticsData.totalLearners,
-          completionRate: realAnalyticsData.completionRate,
-          completionRateOverTime: realAnalyticsData.completionRateOverTime || [],
-          dropOffData: trail.steps.map((step, index) => {
-            const stepRetention = realAnalyticsData.stepRetention.find(s => s.stepIndex === index);
-            return {
-              step: index + 1,
-              stepTitle: step.title,
-              learnersReached: stepRetention?.learnersReached || 0,
-              learnersCompleted: stepRetention?.learnersReached || 0,
-              retentionRate: stepRetention?.retentionRate || 0
-            };
-          }),
-          revenueOverTime: generateRevenueOverTime(realAnalyticsData.events),
-          revenueByWeek: generateRevenueByWeek(realAnalyticsData.events),
-          revenueByDay: generateRevenueByDay(realAnalyticsData.events),
-          totalWatchTime: realAnalyticsData.totalWatchTime,
-          watchTimePerStep: trail.steps.map((step, idx) => {
-            const videoWatchTime = realAnalyticsData.videoWatchTime.find(s => s.stepIndex === idx);
-            return {
-              stepTitle: step.title,
-              watchTime: videoWatchTime?.totalWatchTime || 0
-            };
-          }),
-          revenueByStep: trail.steps.map((step, idx) => {
-            const revenueByStep = realAnalyticsData.revenueByStep.find(s => s.stepIndex === idx);
-            return {
-              stepTitle: step.title,
-              revenue: (revenueByStep?.skipRevenue || 0) + (revenueByStep?.tipRevenue || 0)
-            };
-          }),
-          learnersByStep: [],
-          dropOffOverTime: generateDropOffOverTime(realAnalyticsData.events),
-          dropOffByTime: generateDropOffByTime(realAnalyticsData.events, realAnalyticsData.totalLearners),
-          watchTimeByTime: generateWatchTimeByTime(realAnalyticsData.events, realAnalyticsData.totalWatchTime),
-          watchTimeOverTime: generateWatchTimeOverTime(realAnalyticsData.events),
-        };
+                  // Convert real analytics to the expected format
+          const analyticsData: AnalyticsData = {
+            totalLearners: realAnalyticsData.totalLearners,
+            totalRevenue: realAnalyticsData.totalRevenue,
+            totalWatchTime: realAnalyticsData.totalWatchTime,
+            completionRate: realAnalyticsData.completionRate,
+            retentionRate: (realAnalyticsData as any).retentionRate || [],
+            revenueByStep: (realAnalyticsData as any).revenueByStep?.map((s: any) => ({
+              step: s.step,
+              title: s.title,
+              revenue: s.revenue
+            })) || [],
+            completionRateByDay: (realAnalyticsData as any).completionRateByDay || [],
+            watchTimeByDay: (realAnalyticsData as any).watchTimeByDay || [],
+            learnersByDay: (realAnalyticsData as any).learnersByDay || [],
+            revenueByDay: (realAnalyticsData as any).revenueByDay || [],
+            events: realAnalyticsData.events || [],
+          };
         setAnalytics(analyticsData);
       }
     } catch (error) {
       console.error('Error refreshing analytics:', error);
+      setLoading(false);
+      setError('Failed to refresh analytics. Please try again.');
+      toast({
+        title: 'Error',
+        description: 'Failed to refresh analytics. Please try again.',
+        variant: 'destructive',
+      });
     } finally {
       setLoading(false);
     }
@@ -424,12 +392,12 @@ const TrailAnalytics: React.FC = () => {
     return rewardStep?.thumbnailUrl || '/placeholder.svg';
   };
 
-  const renderChart = () => {
+  const renderChart = (section: string, data: any[], timeToggle: string) => {
     if (!analytics) return null;
 
     const chartHeight = isMobile ? 'h-64' : 'h-80';
 
-    switch (activeMetric) {
+    switch (section) {
       case 'revenue':
         return (
           <Card>
@@ -1487,7 +1455,7 @@ const TrailAnalytics: React.FC = () => {
               <div className={`${chartHeight} w-full`}>
                 <ResponsiveContainer width="100%" height="100%">
                   <LineChart data={realAnalytics?.stepRetention?.map(item => ({
-                    step: item.stepTitle,
+                    step: item.step,
                     retentionRate: item.retentionRate,
                     learnersReached: item.learnersReached
                   })) || []}>
@@ -1965,7 +1933,7 @@ const TrailAnalytics: React.FC = () => {
         {/* Main Content */}
         <div className={`flex-1 transition-all duration-300 ${sidebarOpen ? 'ml-0' : isMobile ? 'ml-0' : 'ml-4'} ${isMobile ? 'min-h-screen' : ''} pt-6`}>
           <div className={`mx-auto w-full ${isMobile ? 'max-w-full' : 'max-w-4xl'}`}>
-            {renderChart()}
+            {renderChart(activeMetric, analytics ? analytics[activeMetric] : [], revenueTimeToggle)}
           </div>
         </div>
       </div>
