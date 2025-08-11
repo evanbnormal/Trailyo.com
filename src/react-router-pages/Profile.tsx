@@ -68,7 +68,7 @@ const Profile: React.FC = () => {
   const [showDeleteSavedDialog, setShowDeleteSavedDialog] = useState(false);
   const navigate = useNavigate();
   const { user, getUserTrails, saveUserTrail, deleteUserTrail, permanentlyDeleteTrail } = useAuth();
-  const { subscriptionStatus, canCreateTrails, isLoading: subscriptionLoading } = useSubscription();
+  const { subscriptionStatus, canCreateTrails, isLoading: subscriptionLoading, refreshSubscriptionStatus } = useSubscription();
   
   // Debug logging for subscription status
   console.log('🔍 Profile subscription status:', {
@@ -696,12 +696,27 @@ const Profile: React.FC = () => {
           
           
           {/* Create New Trail Button */}
-          <Link to="/creator">
-            <Button className="bg-black text-white hover:bg-black/90">
-              <Plus className="h-4 w-4 mr-2" />
-              Create New Trail
+          <div className="flex gap-2">
+            <Link to="/creator">
+              <Button className="bg-black text-white hover:bg-black/90">
+                <Plus className="h-4 w-4 mr-2" />
+                Create New Trail
+              </Button>
+            </Link>
+            
+            {/* Test Analytics Button */}
+            <Button 
+              variant="outline" 
+              onClick={async () => {
+                console.log('🧪 Testing analytics...');
+                await analyticsService.trackTrailView('test-trail', 'Test Trail');
+                console.log('🧪 Analytics test completed');
+              }}
+              className="text-xs"
+            >
+              🧪 Test Analytics
             </Button>
-          </Link>
+          </div>
         </div>
 
         {/* Trails Tabs */}

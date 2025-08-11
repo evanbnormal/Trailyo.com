@@ -79,12 +79,11 @@ function getCreatorName(creator: string | { name: string } | undefined): string 
 }
 
 const LearnerView: React.FC = () => {
+  // ALL HOOKS MUST BE CALLED IN THE SAME ORDER EVERY TIME
   const { trailId } = useParams<{ trailId: string }>();
   const navigate = useNavigate();
   const { getUserTrails, saveUserTrail, isAuthenticated, user } = useAuth();
   const { toast } = useToast();
-  
-  console.log('LearnerView mounted. trailId:', trailId);
 
   const [trail, setTrail] = useState<Trail | null>(null);
   const [currentStepIndex, setCurrentStepIndex] = useState(0);
@@ -105,10 +104,13 @@ const LearnerView: React.FC = () => {
     console.log('🎁 showTipModal changed to:', showTipModal);
   }, [showTipModal]);
 
-  // Debug: Log component render
-  console.log('🎁 LearnerView rendering with showTipModal:', showTipModal);
   const [tipCompleted, setTipCompleted] = useState(false); // Track if user has tipped or skipped
   const [showStripePayment, setShowStripePayment] = useState(false);
+
+  // Debug: Log component mount
+  useEffect(() => {
+    console.log('LearnerView mounted. trailId:', trailId);
+  }, [trailId]);
   const [skipPaymentAmount, setSkipPaymentAmount] = useState(0);
   const [skipPaymentTarget, setSkipPaymentTarget] = useState<number | null>(null);
   const [showLoginModal, setShowLoginModal] = useState(false);
@@ -175,93 +177,270 @@ const LearnerView: React.FC = () => {
         localStorage.removeItem('lastPaymentSuccess');
       }
     }
-  }, [trailId, toast]);
+  }, [trailId]);
 
-  // Check authentication status
   useEffect(() => {
-    if (!isAuthenticated && user) {
-      // User is authenticated but we need to check if they have access
-      console.log('🔐 User authenticated, checking access...');
-    }
-  }, [isAuthenticated, user]);
+    console.log('LearnerView useEffect running. trailId:', trailId, 'actualTrailId:', actualTrailId);
+    let isMounted = true;
 
-  // Load trail data
-  useEffect(() => {
-    if (!actualTrailId) return;
-    
     const loadTrail = async () => {
+      if (!actualTrailId) return;
+
+      console.log('Loading trail with ID:', actualTrailId);
+
+      // First try to load from public API (works for anyone)
       try {
         const response = await fetch(`/api/trails/public?trailId=${actualTrailId}`);
         if (response.ok) {
-          const trailData = await response.json();
-          setTrail(trailData);
-          setTrailLoaded(true);
+          const publicTrail = await response.json();
+          console.log('Found trail via public API:', publicTrail.title);
           
-          // Store current trail ID for payment success tracking
-          localStorage.setItem('currentTrailId', actualTrailId);
-          
-          console.log('🎯 Trail loaded:', trailData);
-        } else {
-          console.error('Failed to load trail');
-          toast({
-            title: "Error",
-            description: "Failed to load trail. Please try again.",
-            variant: "destructive",
-          });
+          if (isMounted) {
+            setTrail(publicTrail);
+            setTrailLoaded(true);
+            
+            // Track trail view
+            analyticsService.trackTrailView(actualTrailId, publicTrail.title);
+            
+            // If user is authenticated, try to load their saved progress
+            if (isAuthenticated && user) {
+              const savedTrails = JSON.parse(localStorage.getItem(`user_${user.id}_saved`) || '[]');
+              const savedTrail = savedTrails.find(t => t.id === actualTrailId);
+              if (savedTrail) {
+                console.log('Loading saved progress for authenticated user');
+                if (savedTrail.currentStepIndex !== undefined) {
+                  setCurrentStepIndex(savedTrail.currentStepIndex);
+                }
+                if (savedTrail.progressStepIndex !== undefined) {
+                  setProgressStepIndex(savedTrail.progressStepIndex);
+                }
+                if (savedTrail.completedSteps) {
+                  setCompletedSteps(new Set(savedTrail.completedSteps));
+                }
+                if (savedTrail.videoWatchTime) {
+                  setVideoWatchTime(savedTrail.videoWatchTime);
+                }
+              }
+            }
+          }
+          return; // Exit early if found via public API
         }
       } catch (error) {
-        console.error('Error loading trail:', error);
-        toast({
-          title: "Error",
-          description: "Failed to load trail. Please try again.",
-          variant: "destructive",
-        });
+        console.log('Public API failed, falling back to local storage search:', error);
+      }
+
+      // Fallback: try to find the trail in current user's trails (for authenticated users)
+      if (isAuthenticated) {
+        const userTrails = await getUserTrails();
+        const { drafts, published } = userTrails;
+        const allUserTrails = [...drafts, ...published];
+        console.log('User trails:', allUserTrails.map(t => ({ id: t.id, title: t.title })));
+        
+        const foundTrail = allUserTrails.find(t => t.id === actualTrailId);
+        
+        // If not found in user's trails, search through saved trails and all users  
+        if (!foundTrail) {
+          console.log('Trail not found in user trails, searching saved trails and all users...');
+          
+          // First check current user's saved trails (from learner view)
+          if (user) {
+            const savedTrails = JSON.parse(localStorage.getItem(`user_${user.id}_saved`) || '[]');
+            console.log('Current user saved trails:', savedTrails.map(t => ({ id: t.id, title: t.title })));
+            const savedTrail = savedTrails.find(t => t.id === actualTrailId);
+            if (savedTrail) {
+              console.log('Found trail in current user saved trails');
+              if (isMounted) {
+                // Ensure creator information is available for tip functionality
+                const trailWithCreator = {
+                  ...savedTrail,
+                  creatorId: savedTrail.creatorId || savedTrail.creator_id || user?.id,
+                  creator_id: savedTrail.creator_id || savedTrail.creatorId || user?.id,
+                  creator: savedTrail.creator || 'Unknown Creator'
+                };
+                setTrail(trailWithCreator);
+                setTrailLoaded(true);
+                
+                // Load saved progress
+                if (savedTrail.currentStepIndex !== undefined) {
+                  setCurrentStepIndex(savedTrail.currentStepIndex);
+                }
+                if (savedTrail.progressStepIndex !== undefined) {
+                  setProgressStepIndex(savedTrail.progressStepIndex);
+                }
+                if (savedTrail.completedSteps) {
+                  setCompletedSteps(new Set(savedTrail.completedSteps));
+                }
+                if (savedTrail.videoWatchTime) {
+                  setVideoWatchTime(savedTrail.videoWatchTime);
+                }
+                
+                // Track trail view
+                analyticsService.trackTrailView(actualTrailId, savedTrail.title);
+              }
+              return; // Exit early if found
+            }
+          }
+          
+          // Then search through all users' published trails
+          const allUsers = JSON.parse(localStorage.getItem('users') || '[]');
+          console.log('All users:', allUsers);
+          
+          for (const user of allUsers) {
+            const userPublished = JSON.parse(localStorage.getItem(`user_${user.id}_published`) || '[]');
+            console.log(`User ${user.id} published trails:`, userPublished.map(t => ({ id: t.id, title: t.title })));
+            const foundTrail = userPublished.find(t => t.id === actualTrailId);
+            if (foundTrail) {
+              console.log('Found trail in user:', user.id);
+              if (isMounted) {
+                // Ensure creator information is available for tip functionality
+                const trailWithCreator = {
+                  ...foundTrail,
+                  creatorId: foundTrail.creatorId || foundTrail.creator_id || user.id,
+                  creator_id: foundTrail.creator_id || foundTrail.creatorId || user.id,
+                  creator: foundTrail.creator || 'Unknown Creator'
+                };
+                setTrail(trailWithCreator);
+                setTrailLoaded(true);
+                analyticsService.trackTrailView(actualTrailId, foundTrail.title);
+              }
+              return; // Exit early if found
+            }
+          }
+        }
+        
+        if (foundTrail && isMounted) {
+          console.log('Setting trail:', foundTrail.title);
+          // Ensure creator information is available for tip functionality
+          const trailWithCreator = {
+            ...foundTrail,
+            creatorId: foundTrail.creatorId || foundTrail.creator_id || user?.id,
+            creator_id: foundTrail.creator_id || foundTrail.creatorId || user?.id,
+            creator: foundTrail.creator || 'Unknown Creator'
+          } as any;
+          setTrail(trailWithCreator);
+          setTrailLoaded(true);
+          
+          // Load saved progress if available
+          if (user) {
+            const savedTrails = JSON.parse(localStorage.getItem(`user_${user.id}_saved`) || '[]');
+            const savedProgress = savedTrails.find((t: any) => t.id === actualTrailId);
+            
+            if (savedProgress) {
+              console.log('Loading saved progress:', savedProgress);
+              // Restore progress state
+              if (savedProgress.currentStepIndex !== undefined) {
+                setCurrentStepIndex(savedProgress.currentStepIndex);
+              }
+              if (savedProgress.progressStepIndex !== undefined) {
+                setProgressStepIndex(savedProgress.progressStepIndex);
+              }
+              if (savedProgress.completedSteps) {
+                setCompletedSteps(new Set(savedProgress.completedSteps));
+              }
+              if (savedProgress.videoWatchTime) {
+                setVideoWatchTime(savedProgress.videoWatchTime);
+              }
+            }
+          }
+          
+          // Track trail view
+          analyticsService.trackTrailView(actualTrailId, foundTrail.title);
+        }
+      }
+      
+      // If we get here, trail was not found
+      if (isMounted) {
+        console.log('Trail not found anywhere, showing error');
+        setTrail(null);
+        setTrailLoaded(true);
       }
     };
 
-    loadTrail();
-  }, [actualTrailId, toast]);
-
-  // Initialize YouTube API
-  useEffect(() => {
-    if (!window.YT) {
-      const tag = document.createElement('script');
-      tag.src = 'https://www.youtube.com/iframe_api';
-      const firstScriptTag = document.getElementsByTagName('script')[0];
-      firstScriptTag.parentNode?.insertBefore(tag, firstScriptTag);
-    }
-  }, []);
-
-  // Initialize YouTube players when trail loads
-  useEffect(() => {
-    if (!trail?.steps || !window.YT) return;
-
-    trail.steps.forEach((step, index) => {
-      if (step.type === 'video' && step.source) {
-        const videoId = getYouTubeVideoId(step.source);
-        if (videoId) {
-          initializeYouTubePlayer(index, videoId);
+    // Fallback trail for testing
+    const fallbackTrail: Trail = {
+      id: 'demo-trail',
+      title: 'Demo Learning Trail',
+      description: 'This is a demonstration trail to test the learner view functionality.',
+      status: 'published',
+      createdAt: new Date().toISOString(),
+      views: 0,
+      earnings: 0,
+      steps: [
+        { 
+          id: 'step-1', 
+          title: 'Welcome to the Demo', 
+          content: 'This is a demonstration of the learner view. You can test all the features here.', 
+          type: 'video' as const, 
+          source: 'https://www.youtube.com/watch?v=dQw4w9WgXcQ', 
+          thumbnailUrl: '', 
+          isSaved: true 
+        },
+        { 
+          id: 'step-2', 
+          title: 'Test Skip Functionality', 
+          content: 'This step allows you to test the skip functionality. Try using the skip button!', 
+          type: 'video' as const, 
+          source: 'https://www.youtube.com/watch?v=dQw4w9WgXcQ', 
+          thumbnailUrl: '', 
+          isSaved: true 
+        },
+        { 
+          id: 'reward-1', 
+          title: '🎉 Demo Reward', 
+          content: 'Congratulations! You\'ve reached the reward step. This will trigger the confetti animation!', 
+          type: 'reward' as const, 
+          source: 'https://example.com/demo-reward', 
+          thumbnailUrl: '', 
+          isSaved: true 
         }
+      ],
+      thumbnailUrl: '',
+      shareableLink: '',
+      suggestedInvestment: 25,
+      trailValue: 150,
+      trailCurrency: 'USD',
+      creator: 'Evan Brady'
+    };
+
+    // Handle different cases
+    if (trailId === 'test' || !trailId) {
+      // Load fallback trail for test route or when no trailId
+      console.log('Loading fallback trail for test route');
+      if (isMounted) {
+        setTrail({
+          ...fallbackTrail,
+          status: fallbackTrail.status || 'published',
+          createdAt: fallbackTrail.createdAt || new Date().toISOString(),
+          views: fallbackTrail.views || 0,
+          earnings: fallbackTrail.earnings || 0,
+        } as Trail);
+        setTrailLoaded(true);
+        // Track trail view for demo trail
+        analyticsService.trackTrailView('demo-trail', fallbackTrail.title);
       }
-    });
-  }, [trail?.steps]);
+    } else if (actualTrailId) {
+      // Load actual trail by ID
+      loadTrail();
+    } else {
+      // Invalid trailId, show error
+      if (isMounted) {
+        console.log('Invalid trailId:', trailId);
+        setTrail(null);
+        setTrailLoaded(true);
+      }
+    }
 
-  // Early return after all hooks
-  if (!trailId) {
-    return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-        <div className="text-lg">No trail ID provided</div>
-      </div>
-    );
-  }
+    // Cleanup function
+    return () => {
+      isMounted = false;
+    };
+  }, [actualTrailId, getUserTrails, navigate, trailId]);
 
-  if (!trailLoaded) {
-    return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-        <div className="text-lg">Loading trail...</div>
-      </div>
-    );
-  }
+  // Reset trail loaded state when trailId changes
+  useEffect(() => {
+    setTrailLoaded(false);
+    setTrail(null);
+  }, [actualTrailId]);
 
   const currentStep = trail?.steps[currentStepIndex];
   const isFirstStep = currentStepIndex === 0;
@@ -365,28 +544,42 @@ const LearnerView: React.FC = () => {
                 watchTimeRef.current[stepIndex].isPlaying = false;
               }
             } else if (typeof window !== 'undefined' && event.data === window.YT.PlayerState.ENDED) {
-              // Video ended, mark as completed
+              // Video ended - only mark as completed if user watched 80% or more
               if (watchTimeRef.current[stepIndex]) {
                 watchTimeRef.current[stepIndex].isPlaying = false;
               }
-              setVideoCompleted(prev => ({
-                ...prev,
-                [stepIndex]: true
-              }));
               
-              // Automatically complete the step when video ends
-              if (stepIndex === currentStepIndex) {
-                // Track step completion
-                analyticsService.trackStepComplete(trail.id, stepIndex, trail.steps[stepIndex].title);
+              // Check if user actually watched enough of the video
+              const duration = player.getDuration();
+              const watchedPercentage = (watchTimeRef.current[stepIndex]?.totalWatched || 0) / duration * 100;
+              
+              if (watchedPercentage >= 80) {
+                setVideoCompleted(prev => ({
+                  ...prev,
+                  [stepIndex]: true
+                }));
                 
-                // Mark step as completed
-                setCompletedSteps(prev => new Set([...prev, stepIndex]));
-                
-                // If this is the final step, mark trail as completed
-                if (stepIndex === trail.steps.length - 1) {
-                  setCompleted(true);
-                  analyticsService.trackTrailComplete(trail.id);
+                // Only complete the step if user watched enough
+                if (stepIndex === currentStepIndex) {
+                  // Track step completion
+                  analyticsService.trackStepComplete(trail.id, stepIndex, trail.steps[stepIndex].title);
+                  
+                  // Mark step as completed
+                  setCompletedSteps(prev => new Set([...prev, stepIndex]));
+                  
+                  // If this is the final step, mark trail as completed
+                  if (stepIndex === trail.steps.length - 1) {
+                    setCompleted(true);
+                    analyticsService.trackTrailComplete(trail.id);
+                  }
                 }
+              } else {
+                // User didn't watch enough - show a message
+                toast({
+                  title: "Video not completed",
+                  description: `You need to watch at least 80% of the video to proceed. You watched ${Math.round(watchedPercentage)}%.`,
+                  variant: "destructive",
+                });
               }
             }
           },
@@ -1642,10 +1835,11 @@ const LearnerView: React.FC = () => {
             </DialogDescription>
           </DialogHeader>
           <div className="py-4">
-            <StripePayment
+                        <StripePayment
               amount={skipPaymentAmount}
               trailId={trail?.id || 'skip-payment'}
-                              creatorId={getCreatorName(trail?.creator)}
+              creatorId={trail?.creatorId || trail?.creator_id || 'unknown'}
+              type="skip_payment"
               onSuccess={() => {
                 if (skipPaymentTarget !== null && trail) {
                   // Mark all steps up to (but NOT including) skipPaymentTarget as completed
@@ -1668,7 +1862,7 @@ const LearnerView: React.FC = () => {
                   setCurrentStepIndex(skipPaymentTarget);
                   
                   // Track skip payment
-                  analyticsService.trackTipDonated(trail.id, skipPaymentAmount);
+                  analyticsService.trackStepSkip(trail.id, skipPaymentTarget || 0, `Step ${skipPaymentTarget ? skipPaymentTarget + 1 : ''}`, skipPaymentAmount);
                 }
                 
                 toast({

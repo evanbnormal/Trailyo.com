@@ -101,9 +101,12 @@ export async function POST(request: NextRequest) {
             } else {
               const baseUrl = process.env.BASE_URL || 'http://localhost:3000';
               const confirmationUrl = `${baseUrl}/api/auth/confirm-email?email=${encodeURIComponent(email)}`;
+              // Try to send with verified sender email
+              const senderEmail = process.env.SENDGRID_FROM_EMAIL || 'noreply@trailyo.com';
+              
               await sgMail.send({
                 to: email,
-                from: 'noreply@trailyo.com',
+                from: senderEmail,
                 subject: 'Confirm your email',
                 text: 'Click the link to confirm your email!',
                 html: `
@@ -178,16 +181,21 @@ export async function POST(request: NextRequest) {
 
 export async function GET(request: NextRequest) {
   try {
-    const users = JSON.parse(localStorage.getItem('users') || '[]') as Array<{
-      id: string;
-      name: string;
-      email: string;
-      password: string;
-    }>;
+    // Fetch users from database instead of localStorage
+    const users = await db.user.findMany({
+      select: {
+        id: true,
+        name: true,
+        email: true,
+        confirmedAt: true,
+        createdAt: true,
+        // Don't include password for security
+      }
+    });
     
     return NextResponse.json({ users });
   } catch (error) {
-    console.error('Error fetching users:', error);
+    console.error('Error fetching users from database:', error);
     return NextResponse.json({ error: 'Failed to fetch users' }, { status: 500 });
   }
 } 

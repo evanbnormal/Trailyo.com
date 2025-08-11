@@ -20,6 +20,11 @@ export async function GET(request: NextRequest) {
 
     console.log('📊 Total events:', events.length);
     console.log('📊 Event types:', events.map(e => e.eventType));
+    console.log('📊 Sample events:', events.slice(0, 3).map(e => ({
+      eventType: e.eventType,
+      data: e.data,
+      timestamp: e.timestamp
+    })));
 
     if (events.length === 0) {
       return NextResponse.json({
@@ -51,11 +56,30 @@ export async function GET(request: NextRequest) {
 export async function POST(request: Request) {
   try {
     const body = await request.json();
-    const { trailId, eventType, action } = body;
+    const { trailId, eventType, action, resetTrailId } = body;
 
     console.log('📥 Analytics API received POST request');
-    console.log('📥 Request body:', { trailId, eventType, action });
+    console.log('📥 Request body:', { trailId, eventType, action, resetTrailId });
 
+    // Handle reset analytics
+    if (resetTrailId) {
+      console.log('🗑️ Resetting analytics for trail:', resetTrailId);
+      
+      // Delete all analytics events for this trail
+      const deletedEvents = await db.trailAnalyticsEvent.deleteMany({
+        where: { trailId: resetTrailId }
+      });
+      
+      console.log('🗑️ Deleted analytics events:', deletedEvents);
+      
+      return NextResponse.json({ 
+        success: true, 
+        message: `Reset analytics for trail ${resetTrailId}`,
+        deletedCount: deletedEvents.count 
+      });
+    }
+
+    // Handle creating new analytics event
     if (!trailId || !eventType) {
       return NextResponse.json({ error: 'Missing required fields' }, { status: 400 });
     }
@@ -74,11 +98,17 @@ export async function POST(request: Request) {
     });
 
     console.log('📊 Analytics event stored in database:', storedEvent);
+    console.log('📊 Event details:', {
+      trailId,
+      eventType,
+      data: action,
+      timestamp: new Date()
+    });
 
     return NextResponse.json({ success: true, event: storedEvent });
   } catch (error) {
-    console.error('Error storing analytics event:', error);
-    return NextResponse.json({ error: 'Failed to store analytics event' }, { status: 500 });
+    console.error('Error in analytics POST:', error);
+    return NextResponse.json({ error: 'Failed to process analytics request' }, { status: 500 });
   }
 }
 
@@ -117,37 +147,56 @@ function calculateAnalyticsFromEvents(events: Array<{
   console.log('📊 Active session IDs:', Array.from(activeSessionIds));
   console.log('📊 Total active learners calculated:', totalLearners);
 
-  // 2. REVENUE CALCULATION
-  const revenueEvents = events.filter(e => e.eventType === 'tip_donated' || e.eventType === 'step_skip');
-  const totalRevenue = revenueEvents.reduce((sum, event) => {
-    if (event.eventType === 'tip_donated') {
-      return sum + ((event.data.tipAmount as number) || 0);
-    } else if (event.eventType === 'step_skip') {
-      return sum + ((event.data.skipAmount as number) || 0);
-    }
-    return sum;
+  // 2. REVENUE CALCULATION - SEPARATE TIPS AND SKIP REVENUE
+  const tipEvents = events.filter(e => e.eventType === 'tip_donated');
+  const skipEvents = events.filter(e => e.eventType === 'step_skip');
+  
+  // Calculate total tips
+  const totalTips = tipEvents.reduce((sum, event) => {
+    return sum + ((event.data.tipAmount as number) || 0);
   }, 0);
+  
+  // Calculate total skip revenue
+  const totalSkipRevenue = skipEvents.reduce((sum, event) => {
+    return sum + ((event.data.skipAmount as number) || 0);
+  }, 0);
+  
+  // Total revenue is sum of tips and skip revenue
+  const totalRevenue = totalTips + totalSkipRevenue;
 
-  // Revenue by step
+  console.log('📊 Revenue breakdown:', {
+    totalTips,
+    totalSkipRevenue,
+    totalRevenue,
+    tipEventsCount: tipEvents.length,
+    skipEventsCount: skipEvents.length
+  });
+
+  // Revenue by step - separate tips and skip revenue
   const revenueByStep = trailViews[0]?.data?.trailTitle ? Array(3).fill(0).map((_, index) => ({
     step: index,
     title: index === 0 ? 'Step 1' : index === 1 ? 'Reward' : 'Step 2',
+    skipRevenue: 0,
+    tipRevenue: 0,
     revenue: 0
   })) : [];
 
-  // Attribute revenue to steps
-  revenueEvents.forEach(event => {
-    if (event.eventType === 'tip_donated') {
-      // Tips go to the reward step (index 1)
-      if (revenueByStep[1]) {
-        revenueByStep[1].revenue += (event.data.tipAmount as number) || 0;
-      }
-    } else if (event.eventType === 'step_skip') {
-      // Skip payments go to the skipped step
-      const stepIndex = (event.data.stepIndex as number) || 0;
-      if (revenueByStep[stepIndex]) {
-        revenueByStep[stepIndex].revenue += (event.data.skipAmount as number) || 0;
-      }
+  // Attribute skip revenue to steps
+  skipEvents.forEach(event => {
+    const stepIndex = (event.data.stepIndex as number) || 0;
+    if (revenueByStep[stepIndex]) {
+      const skipAmount = (event.data.skipAmount as number) || 0;
+      revenueByStep[stepIndex].skipRevenue += skipAmount;
+      revenueByStep[stepIndex].revenue += skipAmount;
+    }
+  });
+
+  // Attribute tip revenue to reward step (index 1)
+  tipEvents.forEach(event => {
+    if (revenueByStep[1]) {
+      const tipAmount = (event.data.tipAmount as number) || 0;
+      revenueByStep[1].tipRevenue += tipAmount;
+      revenueByStep[1].revenue += tipAmount;
     }
   });
 
@@ -184,7 +233,6 @@ function calculateAnalyticsFromEvents(events: Array<{
   // Sort events by timestamp
   const sortedEvents = events.sort((a, b) => a.timestamp.getTime() - b.timestamp.getTime());
   const sortedVideoWatches = videoWatches.sort((a, b) => a.timestamp.getTime() - b.timestamp.getTime());
-  const sortedRevenueEvents = revenueEvents.sort((a, b) => a.timestamp.getTime() - b.timestamp.getTime());
 
   // Calculate daily completions
   stepCompletions.forEach(event => {
@@ -228,22 +276,41 @@ function calculateAnalyticsFromEvents(events: Array<{
     .sort(([a], [b]) => a.localeCompare(b))
     .map(([date, watchTime]) => ({ date, watchTime }));
 
-  // Calculate revenue by day
-  sortedRevenueEvents.forEach(event => {
+  // Calculate revenue by day - separate tips and skip revenue
+  const sortedTipEvents = tipEvents.sort((a, b) => a.timestamp.getTime() - b.timestamp.getTime());
+  const sortedSkipEvents = skipEvents.sort((a, b) => a.timestamp.getTime() - b.timestamp.getTime());
+  
+  // Calculate tips by day
+  const tipsByDay = new Map<string, number>();
+  sortedTipEvents.forEach(event => {
     const date = event.timestamp;
     const dayKey = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
-    const amount = event.eventType === 'tip_donated' ? 
-      ((event.data.tipAmount as number) || 0) : 
-      ((event.data.skipAmount as number) || 0);
-    revenueByDay.set(dayKey, (revenueByDay.get(dayKey) || 0) + amount);
+    const tipAmount = (event.data.tipAmount as number) || 0;
+    tipsByDay.set(dayKey, (tipsByDay.get(dayKey) || 0) + tipAmount);
+  });
+  
+  // Calculate skip revenue by day
+  sortedSkipEvents.forEach(event => {
+    const date = event.timestamp;
+    const dayKey = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
+    const skipAmount = (event.data.skipAmount as number) || 0;
+    revenueByDay.set(dayKey, (revenueByDay.get(dayKey) || 0) + skipAmount);
   });
   const revenueByDayArray = Array.from(revenueByDay.entries())
     .sort(([a], [b]) => a.localeCompare(b))
     .map(([date, revenue]) => ({ date, revenue }));
 
+  // Calculate tips over time
+  const tipsOverTime = Array.from(tipsByDay.entries())
+    .sort(([a], [b]) => a.localeCompare(b))
+    .map(([date, amount]) => ({ date, amount }));
+
   return {
+    trailId: events[0]?.trailId || '',
     totalLearners,
     totalRevenue,
+    totalTips,
+    totalSkipRevenue,
     totalWatchTime,
     completionRate,
     retentionRate,
@@ -252,7 +319,16 @@ function calculateAnalyticsFromEvents(events: Array<{
     watchTimeByDay: watchTimeByDayArray,
     learnersByDay: learnersByDayArray,
     revenueByDay: revenueByDayArray,
-    events
+    tipsByDay: Array.from(tipsByDay.entries())
+      .sort(([a], [b]) => a.localeCompare(b))
+      .map(([date, amount]) => ({ date, amount })),
+    tipsOverTime,
+    events: events.map(event => ({
+      trailId: event.trailId,
+      eventType: event.eventType,
+      data: event.data,
+      timestamp: event.timestamp.getTime()
+    }))
   };
 }
 

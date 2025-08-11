@@ -50,9 +50,21 @@ export const useSubscription = () => {
   const [isLoading, setIsLoading] = useState(true);
   const subscriberRef = useRef<(status: SubscriptionStatus) => void>();
 
+  // Debug logging for user and subscription status
+  useEffect(() => {
+    console.log('🔍 useSubscription debug:', {
+      userId: user?.id,
+      userEmail: user?.email,
+      userName: user?.name,
+      currentSubscriptionStatus: subscriptionStatus,
+      isLoading
+    });
+  }, [user?.id, user?.email, user?.name, subscriptionStatus, isLoading]);
+
   // Create a subscriber function for this component
   useEffect(() => {
     subscriberRef.current = (status: SubscriptionStatus) => {
+      console.log('📡 Subscription status update received:', status);
       setSubscriptionStatus(status);
       setIsLoading(false);
     };
@@ -70,11 +82,14 @@ export const useSubscription = () => {
   // Smart subscription status loading with automatic cache invalidation
   const loadSubscriptionStatusSmart = useCallback(async (): Promise<SubscriptionStatus> => {
     if (!user?.id) {
+      console.log('❌ No user ID available for subscription lookup');
       const defaultStatus: SubscriptionStatus = { isSubscribed: false, isTrialing: false, status: 'inactive' };
       setSubscriptionStatus(defaultStatus);
       setIsLoading(false);
       return defaultStatus;
     }
+
+    console.log(`🔍 Loading subscription status for user: ${user.id} (${user.email})`);
 
     const now = Date.now();
     const cacheAge = globalCacheTimestamp ? now - globalCacheTimestamp : 0;
@@ -163,6 +178,7 @@ export const useSubscription = () => {
   // Initialize subscription status with smart caching
   useEffect(() => {
     if (user?.id) {
+      console.log(`🔄 User changed, clearing cache and loading fresh subscription status for: ${user.id}`);
       // Force fresh load by clearing cache first
       globalSubscriptionStatus = null;
       globalLoadingPromise = null;
@@ -170,6 +186,7 @@ export const useSubscription = () => {
       
       loadSubscriptionStatusSmart();
     } else if (!user?.id) {
+      console.log('🔄 User logged out, clearing subscription status');
       // User logged out - clear state
       const defaultStatus: SubscriptionStatus = { isSubscribed: false, isTrialing: false, status: 'inactive' };
       setSubscriptionStatus(defaultStatus);
@@ -184,7 +201,9 @@ export const useSubscription = () => {
 
   // Helper functions
   const canCreateTrails = useCallback(() => {
-    return subscriptionStatus.isSubscribed || subscriptionStatus.isTrialing;
+    const canCreate = subscriptionStatus.isSubscribed || subscriptionStatus.isTrialing;
+    console.log(`🔍 canCreateTrails check: ${canCreate} (isSubscribed: ${subscriptionStatus.isSubscribed}, isTrialing: ${subscriptionStatus.isTrialing})`);
+    return canCreate;
   }, [subscriptionStatus.isSubscribed, subscriptionStatus.isTrialing]);
 
   /**
@@ -265,20 +284,13 @@ export const useSubscription = () => {
   }, [user?.id, loadSubscriptionStatusSmart]);
 
   /**
-   * Manually refresh subscription status (invalidates cache)
-   * Call this after payment success, subscription changes, etc.
+   * Manual refresh function for debugging
    */
   const refreshSubscriptionStatus = useCallback(async () => {
-    if (!user?.id) return;
-    
-    console.log(`🔄 Manual refresh requested`);
-    
-    // Invalidate cache to force fresh load
-    invalidateSubscriptionCache();
-    
-    // Load fresh data
-    await loadSubscriptionStatusSmart();
-  }, [user?.id, loadSubscriptionStatusSmart]);
+    console.log('🔄 Manual subscription status refresh requested');
+    clearSubscriptionCache();
+    return await loadSubscriptionStatusSmart();
+  }, [loadSubscriptionStatusSmart]);
 
   return {
     subscriptionStatus,

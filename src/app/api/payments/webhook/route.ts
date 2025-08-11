@@ -369,8 +369,8 @@ async function handlePaymentIntentSucceeded(paymentIntent: Stripe.PaymentIntent)
       console.log(`📊 Recording tip payment analytics: $${amount} for trail ${trailId}`);
       await analyticsService.trackTipDonated(trailId, amount);
     } else {
-      console.log(`📊 Recording generic payment analytics: $${amount} for trail ${trailId}`);
-      await analyticsService.trackTipDonated(trailId, amount);
+      console.log(`❌ Unknown payment type: ${type} for trail ${trailId} - not recording analytics`);
+      // Don't record analytics for unknown payment types
     }
     
     console.log(`✅ Analytics event recorded for payment intent: ${paymentIntent.id}`);

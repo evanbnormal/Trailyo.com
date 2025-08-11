@@ -1,90 +1,97 @@
 import { NextRequest, NextResponse } from 'next/server';
 import sgMail from '@sendgrid/mail';
 
-// Initialize SendGrid only if API key is available (runtime only)
-const initializeSendGrid = () => {
-  if (process.env.SENDGRID_API_KEY) {
-    sgMail.setApiKey(process.env.SENDGRID_API_KEY);
-    return true;
-  }
-  return false;
-};
-
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
     const { email } = body;
-
-    if (!email) {
-      return NextResponse.json({ error: 'Email is required' }, { status: 400 });
-    }
-
-    const sendGridInitialized = initializeSendGrid();
-    if (!sendGridInitialized) {
-      console.log('SendGrid not initialized - skipping email');
-      return NextResponse.json({ 
-        success: false, 
-        message: 'SendGrid not configured',
-        details: {
-          apiKeyExists: false,
-          apiKeyLength: 0,
-          fromEmail: 'noreply@trailyo.com'
-        }
-      });
-    }
     
-    console.log('=== SENDGRID TEST ===');
-    console.log('SENDGRID_API_KEY exists:', !!process.env.SENDGRID_API_KEY);
-    console.log('SENDGRID_API_KEY length:', process.env.SENDGRID_API_KEY?.length);
-    console.log('Testing email to:', email);
+    if (!email) {
+      return NextResponse.json({ error: 'Email required' }, { status: 400 });
+    }
 
-    const emailData = {
+    console.log('Testing email sending to:', email);
+    console.log('SENDGRID_API_KEY exists:', !!process.env.SENDGRID_API_KEY);
+    console.log('BASE_URL:', process.env.BASE_URL);
+
+    // Initialize SendGrid
+    if (!process.env.SENDGRID_API_KEY) {
+      console.log('No SendGrid API key found');
+      return NextResponse.json({ 
+        error: 'SendGrid API key not configured',
+        hasApiKey: false
+      }, { status: 500 });
+    }
+
+    sgMail.setApiKey(process.env.SENDGRID_API_KEY);
+    
+    const baseUrl = process.env.BASE_URL || 'https://trailyo-com.vercel.app';
+    
+    // Send a test email
+    const msg = {
       to: email,
-      from: 'noreply@trailyo.com', // This needs to be verified in SendGrid
+      from: 'noreply@trailyo.com',
       subject: 'Test Email from Trailyo',
-      text: 'This is a test email to verify SendGrid configuration.',
+      text: 'This is a test email to verify SendGrid is working.',
       html: `
-        <div style="background:#111;padding:32px 0;text-align:center;font-family:sans-serif;">
-          <img src="${process.env.BASE_URL || 'http://localhost:3000'}/Asset%2010newest.png" alt="Trailyo" style="height:48px;margin-bottom:24px;" />
-          <h2 style="color:#fff;margin-bottom:16px;font-size:24px;">Test Email</h2>
-          <p style="color:#ccc;margin-bottom:32px;font-size:16px;">
-            This is a test email to verify that SendGrid is working correctly.
+        <div style="background:#111;padding:32px;text-align:center;font-family:sans-serif;">
+          <h2 style="color:#fff;margin-bottom:16px;">Test Email</h2>
+          <p style="color:#ccc;margin-bottom:16px;">
+            This is a test email to verify SendGrid configuration is working properly.
           </p>
-          <p style="color:#888;margin-top:32px;font-size:12px;">
-            If you received this, the email configuration is working!
+          <p style="color:#888;font-size:12px;">
+            Sent from: ${baseUrl}<br>
+            Time: ${new Date().toISOString()}
           </p>
         </div>
       `,
     };
 
-    console.log('Sending test email...');
-    const result = await sgMail.send(emailData);
-    console.log('SendGrid response:', result);
+    console.log('Attempting to send email with details:', {
+      to: msg.to,
+      from: msg.from,
+      subject: msg.subject,
+      baseUrl
+    });
+
+    await sgMail.send(msg);
     
+    console.log('Test email sent successfully');
     return NextResponse.json({ 
       success: true, 
       message: 'Test email sent successfully',
-      details: {
-        apiKeyExists: !!process.env.SENDGRID_API_KEY,
-        apiKeyLength: process.env.SENDGRID_API_KEY?.length,
-        fromEmail: 'noreply@trailyo.com'
-      }
+      hasApiKey: true,
+      baseUrl
     });
 
   } catch (error) {
-    console.error('=== SENDGRID TEST ERROR ===');
-    console.error('Error type:', typeof error);
-    console.error('Error message:', error instanceof Error ? error.message : error);
-    console.error('Full error object:', error);
-
+    console.error('Test email error:', error);
+    
+    // Check if it's a SendGrid authentication error
+    if (error instanceof Error) {
+      if (error.message.includes('Unauthorized') || error.message.includes('403')) {
+        return NextResponse.json({ 
+          error: 'SendGrid API key is invalid or unauthorized',
+          details: error.message,
+          hasApiKey: true,
+          isAuthError: true
+        }, { status: 500 });
+      }
+      
+      if (error.message.includes('from')) {
+        return NextResponse.json({ 
+          error: 'Sender email address not verified in SendGrid',
+          details: error.message,
+          hasApiKey: true,
+          isSenderError: true
+        }, { status: 500 });
+      }
+    }
+    
     return NextResponse.json({ 
       error: 'Failed to send test email',
-      details: {
-        apiKeyExists: !!process.env.SENDGRID_API_KEY,
-        apiKeyLength: process.env.SENDGRID_API_KEY?.length,
-        errorMessage: error instanceof Error ? error.message : 'Unknown error',
-        errorType: typeof error
-      }
+      details: error instanceof Error ? error.message : 'Unknown error',
+      hasApiKey: !!process.env.SENDGRID_API_KEY
     }, { status: 500 });
   }
 } 

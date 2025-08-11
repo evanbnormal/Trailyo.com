@@ -33,9 +33,12 @@ export async function POST(request: NextRequest) {
       console.log('Sending confirmation email to:', email);
       console.log('Confirmation URL:', confirmationUrl);
       
+      // Try to send with verified sender email
+      const senderEmail = process.env.SENDGRID_FROM_EMAIL || 'noreply@trailyo.com';
+      
       await sgMail.send({
         to: email,
-        from: 'noreply@trailyo.com',
+        from: senderEmail,
         subject: 'Confirm your email',
         text: 'Click the link to confirm your email!',
         html: `

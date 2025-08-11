@@ -34,6 +34,9 @@ STRIPE_CREATOR_SUBSCRIPTION_PRICE_ID="price_1Rn2UFCksBPHzazD0sJhzUxa" # Current 
 ```bash
 # SendGrid API Key for email sending
 SENDGRID_API_KEY="SG...."
+
+# SendGrid verified sender email (optional, defaults to noreply@trailyo.com)
+SENDGRID_FROM_EMAIL="your-verified-email@yourdomain.com"
 ```
 **Purpose**: Sends email confirmations, password resets, and welcome emails.
 

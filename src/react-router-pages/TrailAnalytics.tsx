@@ -325,8 +325,25 @@ const TrailAnalytics: React.FC = () => {
   }, [trailId, getUserTrails, navigate, toast]);
 
   const handleResetAnalytics = async () => {
+    // Show confirmation dialog
+    const confirmed = window.confirm(
+      'Are you sure you want to reset all analytics for this trail? This action cannot be undone.'
+    );
+    
+    if (!confirmed) {
+      return;
+    }
+    
     try {
-      await analyticsService.resetAnalytics();
+      console.log('🗑️ Resetting analytics for trail:', trailId);
+      await analyticsService.resetAnalytics(trailId);
+      
+      // Show success message
+      toast({
+        title: 'Success',
+        description: 'Analytics reset successfully',
+      });
+      
       // Reload the page to refresh analytics
       window.location.reload();
     } catch (error) {
@@ -568,7 +585,7 @@ const TrailAnalytics: React.FC = () => {
                 {revenueViewToggle === 'skip' && (
                   <>
                     <div className="text-2xl font-bold text-blue-600">
-                      ${realAnalytics?.revenueByStep?.reduce((total, step) => total + step.skipRevenue, 0)?.toFixed(2) || '0.00'}
+                      ${realAnalytics?.totalSkipRevenue?.toFixed(2) || '0.00'}
                     </div>
                     <div className="text-sm text-gray-600">Skipped Revenue</div>
                   </>
@@ -599,14 +616,14 @@ const TrailAnalytics: React.FC = () => {
                       strokeColor = '#10b981';
                       tooltipLabel = 'Total Revenue';
                     } else if (revenueViewToggle === 'skip') {
-                      // Filter events to only include skip payments
-                      const skipEvents = realAnalytics?.events?.filter(e => e.eventType === 'step_skip') || [];
-                      chartData = generateRevenueOverTime(skipEvents);
+                      // Use the new skip revenue data
+                      chartData = realAnalytics?.revenueByDay || [];
                       dataKey = 'revenue';
                       strokeColor = '#3b82f6';
                       tooltipLabel = 'Skip Payments';
                     } else if (revenueViewToggle === 'tips') {
-                      chartData = realAnalytics?.tipsOverTime || [];
+                      // Use the new tips data
+                      chartData = realAnalytics?.tipsByDay || [];
                       dataKey = 'amount';
                       strokeColor = '#f97316';
                       tooltipLabel = 'Tip Payments';
@@ -626,7 +643,7 @@ const TrailAnalytics: React.FC = () => {
                         const monthData = chartData?.find(item => item.date === monthKey);
                         allMonths.push({
                           date: new Date(monthKey + '-01').toLocaleDateString('en-US', { month: 'short' }),
-                          [dataKey]: monthData ? Number(monthData[dataKey].toFixed(2)) : 0
+                          [dataKey]: monthData && monthData[dataKey] !== undefined ? Number(monthData[dataKey].toFixed(2)) : 0
                         });
                       }
                                               return (
@@ -660,7 +677,7 @@ const TrailAnalytics: React.FC = () => {
                         const weekData = chartData?.find(item => item.week === weekKey);
                         allWeeks.push({
                           week: mondayDate.toLocaleDateString('en-US', { day: 'numeric', month: 'short' }),
-                          [dataKey]: weekData ? Number(weekData[dataKey].toFixed(2)) : 0
+                          [dataKey]: weekData && weekData[dataKey] !== undefined ? Number(weekData[dataKey].toFixed(2)) : 0
                         });
                       }
                                               return (
@@ -701,7 +718,7 @@ const TrailAnalytics: React.FC = () => {
                         
                         return {
                           day: `${currentDate.toLocaleDateString('en-US', { weekday: 'short' })} ${currentDate.getDate()}${getOrdinalSuffix(currentDate.getDate())}`,
-                          [dataKey]: dayData ? Number(dayData[dataKey].toFixed(2)) : 0
+                          [dataKey]: dayData && dayData[dataKey] !== undefined ? Number(dayData[dataKey].toFixed(2)) : 0
                         };
                       });
                                                                       return (

@@ -115,28 +115,33 @@ class AnalyticsService {
     }
   }
 
-  // Reset all analytics data
-  async resetAnalytics(): Promise<void> {
+  // Reset analytics for a specific trail
+  async resetAnalytics(trailId?: string): Promise<void> {
     try {
       const response = await fetch('/api/analytics', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ action: 'reset' }),
+        body: JSON.stringify({ resetTrailId: trailId }),
       });
+      
       if (response.ok) {
-        console.log('Analytics reset successfully');
+        const result = await response.json();
+        console.log('✅ Analytics reset successfully:', result);
+      } else {
+        console.error('❌ Failed to reset analytics:', response.status, response.statusText);
       }
     } catch (error) {
-      console.error('Error resetting analytics:', error);
+      console.error('❌ Error resetting analytics:', error);
     }
   }
 
   // Private method for recording events
   private async recordEvent(trailId: string, eventType: AnalyticsEvent['eventType'], data: any): Promise<void> {
     try {
-      console.log('📤 Sending analytics event to API:', { trailId, eventType, data });
+      console.log('📤 Sending analytics event:', { trailId, eventType, data });
+      
       const response = await fetch('/api/analytics', {
         method: 'POST',
         headers: {
@@ -145,19 +150,20 @@ class AnalyticsService {
         body: JSON.stringify({
           trailId,
           eventType,
-          data
+          action: data
         }),
       });
       
       if (!response.ok) {
-        console.error('❌ Analytics API error:', response.status, response.statusText);
-        const errorText = await response.text();
-        console.error('❌ Error details:', errorText);
-      } else {
-        console.log('✅ Analytics event sent successfully');
+        throw new Error(`Analytics API error: ${response.status} ${response.statusText}`);
       }
+      
+      const result = await response.json();
+      console.log('✅ Analytics event recorded:', result);
+      
     } catch (error) {
-      console.error('❌ Error recording analytics event:', error);
+      console.error('❌ Failed to record analytics event:', error);
+      // Don't throw - we don't want analytics failures to break the app
     }
   }
 
