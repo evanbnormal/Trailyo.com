@@ -703,19 +703,6 @@ const Profile: React.FC = () => {
                 Create New Trail
               </Button>
             </Link>
-            
-            {/* Test Analytics Button */}
-            <Button 
-              variant="outline" 
-              onClick={async () => {
-                console.log('🧪 Testing analytics...');
-                await analyticsService.trackTrailView('test-trail', 'Test Trail');
-                console.log('🧪 Analytics test completed');
-              }}
-              className="text-xs"
-            >
-              🧪 Test Analytics
-            </Button>
           </div>
         </div>
 

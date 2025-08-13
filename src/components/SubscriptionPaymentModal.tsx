@@ -134,19 +134,10 @@ const SubscriptionPaymentModal: React.FC<SubscriptionPaymentModalProps> = ({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-md">
         <DialogHeader>
-          <div className="flex items-center justify-between">
-            <DialogTitle className="flex items-center">
-              <CreditCard className="h-5 w-5 mr-2" />
-              Secure Payment Setup
-            </DialogTitle>
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={() => onOpenChange(false)}
-            >
-              <X className="h-4 w-4" />
-            </Button>
-          </div>
+          <DialogTitle className="flex items-center">
+            <CreditCard className="h-5 w-5 mr-2" />
+            Secure Payment Setup
+          </DialogTitle>
         </DialogHeader>
 
         <Elements stripe={stripePromise} options={stripeOptions}>

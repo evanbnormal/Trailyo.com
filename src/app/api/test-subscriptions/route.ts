@@ -91,3 +91,35 @@ export async function GET(request: NextRequest) {
     );
   }
 } 
+
+export async function POST(request: NextRequest) {
+  try {
+    const body = await request.json();
+    const { action, userId, status } = body;
+
+    if (action === 'update_status' && userId && status) {
+      const { db } = await import('@/lib/db');
+      
+      await db.subscription.update({
+        where: { userId },
+        data: { 
+          status,
+          updatedAt: new Date()
+        }
+      });
+
+      return NextResponse.json({ 
+        success: true, 
+        message: `Updated subscription status to ${status} for user ${userId}` 
+      });
+    }
+
+    return NextResponse.json({ error: 'Invalid action' }, { status: 400 });
+  } catch (error) {
+    console.error('Test subscriptions POST error:', error);
+    return NextResponse.json(
+      { error: 'Failed to update subscription' },
+      { status: 500 }
+    );
+  }
+} 

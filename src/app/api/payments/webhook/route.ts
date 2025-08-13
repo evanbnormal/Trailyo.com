@@ -45,34 +45,34 @@ export async function POST(request: NextRequest) {
     switch (event.type) {
       // Subscription Lifecycle Events
       case 'customer.subscription.created':
-        await handleSubscriptionCreated(event.data.object as Stripe.Subscription);
+        await handleSubscriptionCreated(event.data.object as Stripe.Subscription, stripe);
         break;
 
       case 'customer.subscription.updated':
-        await handleSubscriptionUpdated(event.data.object as Stripe.Subscription);
+        await handleSubscriptionUpdated(event.data.object as Stripe.Subscription, stripe);
         break;
 
       case 'customer.subscription.deleted':
-        await handleSubscriptionDeleted(event.data.object as Stripe.Subscription);
+        await handleSubscriptionDeleted(event.data.object as Stripe.Subscription, stripe);
         break;
 
       // Trial Events
       case 'customer.subscription.trial_will_end':
-        await handleTrialWillEnd(event.data.object as Stripe.Subscription);
+        await handleTrialWillEnd(event.data.object as Stripe.Subscription, stripe);
         break;
 
       // Payment Events
       case 'invoice.payment_succeeded':
-        await handlePaymentSucceeded(event.data.object as Stripe.Invoice);
+        await handlePaymentSucceeded(event.data.object as Stripe.Invoice, stripe);
         break;
 
       case 'invoice.payment_failed':
-        await handlePaymentFailed(event.data.object as Stripe.Invoice);
+        await handlePaymentFailed(event.data.object as Stripe.Invoice, stripe);
         break;
 
       // Setup Intent Events (for initial payment method setup)
       case 'setup_intent.succeeded':
-        await handleSetupIntentSucceeded(event.data.object as Stripe.SetupIntent);
+        await handleSetupIntentSucceeded(event.data.object as Stripe.SetupIntent, stripe);
         break;
 
       // Customer Events
@@ -109,7 +109,7 @@ export async function POST(request: NextRequest) {
 }
 
 // Subscription Created - Initial setup
-async function handleSubscriptionCreated(subscription: Stripe.Subscription) {
+async function handleSubscriptionCreated(subscription: Stripe.Subscription, stripe: Stripe) {
   console.log(`✅ Subscription created: ${subscription.id}`);
   
   const customerId = subscription.customer as string;
@@ -152,7 +152,7 @@ async function handleSubscriptionCreated(subscription: Stripe.Subscription) {
 }
 
 // Subscription Updated - Status changes, trial end, etc.
-async function handleSubscriptionUpdated(subscription: Stripe.Subscription) {
+async function handleSubscriptionUpdated(subscription: Stripe.Subscription, stripe: Stripe) {
   console.log(`🔄 Subscription updated: ${subscription.id} -> ${subscription.status}`);
   
   try {
@@ -185,7 +185,7 @@ async function handleSubscriptionUpdated(subscription: Stripe.Subscription) {
 }
 
 // Subscription Deleted - Cancellation
-async function handleSubscriptionDeleted(subscription: Stripe.Subscription) {
+async function handleSubscriptionDeleted(subscription: Stripe.Subscription, stripe: Stripe) {
   console.log(`🗑️ Subscription deleted: ${subscription.id}`);
   
   try {
@@ -299,7 +299,7 @@ async function handlePaymentFailed(invoice: Stripe.Invoice) {
 }
 
 // Setup Intent Succeeded - Payment method added
-async function handleSetupIntentSucceeded(setupIntent: Stripe.SetupIntent) {
+async function handleSetupIntentSucceeded(setupIntent: Stripe.SetupIntent, stripe: Stripe) {
   console.log(`✅ Setup intent succeeded: ${setupIntent.id}`);
   console.log(`🔍 Setup intent metadata:`, setupIntent.metadata);
   
@@ -321,7 +321,7 @@ async function handleSetupIntentSucceeded(setupIntent: Stripe.SetupIntent) {
 
     try {
       // Create subscription now that payment method is attached
-      const subscription = await createSubscriptionFromSetupIntent(setupIntent, customerId, userId);
+      const subscription = await createSubscriptionFromSetupIntent(setupIntent, customerId, userId, stripe);
       console.log(`🎉 Successfully created subscription: ${subscription.id}`);
     } catch (error) {
       console.error('❌ Failed to create subscription from setup intent:', error);
@@ -386,7 +386,7 @@ async function handlePaymentIntentFailed(paymentIntent: Stripe.PaymentIntent) {
 }
 
 // Helper: Create subscription from setup intent
-async function createSubscriptionFromSetupIntent(setupIntent: Stripe.SetupIntent, customerId: string, userId: string) {
+async function createSubscriptionFromSetupIntent(setupIntent: Stripe.SetupIntent, customerId: string, userId: string, stripe: Stripe) {
   const priceId = process.env.STRIPE_CREATOR_SUBSCRIPTION_PRICE_ID;
   
   if (!priceId || priceId === 'price_placeholder') {
