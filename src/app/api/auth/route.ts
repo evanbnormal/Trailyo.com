@@ -100,7 +100,7 @@ export async function POST(request: NextRequest) {
               // Continue without sending email for now
             } else {
               const baseUrl = process.env.BASE_URL || 'http://localhost:3000';
-              const confirmationUrl = `${baseUrl}/api/auth/confirm-email?email=${encodeURIComponent(email)}`;
+              const confirmationUrl = `${baseUrl}/confirm-email?email=${encodeURIComponent(email)}`;
               // Try to send with verified sender email
               const senderEmail = process.env.SENDGRID_FROM_EMAIL || 'noreply@trailyo.com';
               

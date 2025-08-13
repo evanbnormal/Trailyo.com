@@ -25,6 +25,14 @@ function ConfirmEmailContent() {
         const response = await fetch(`/api/auth/confirm-email?email=${encodeURIComponent(email)}`);
         
         if (response.ok) {
+          // Get the user data from the response
+          const userData = await response.json();
+          
+          // Store user data in localStorage for auto-login
+          if (userData.user) {
+            localStorage.setItem('currentUser', JSON.stringify(userData.user));
+          }
+          
           setStatus('success');
           setMessage('Email confirmed successfully! You can now sign in.');
         } else {

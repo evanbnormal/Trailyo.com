@@ -158,7 +158,7 @@ function calculateAnalyticsFromEvents(events: Array<{
   
   // Calculate total skip revenue
   const totalSkipRevenue = skipEvents.reduce((sum, event) => {
-    return sum + ((event.data.skipAmount as number) || 0);
+    return sum + ((event.data.skipAmount as number) || (event.data.skipCost as number) || 0);
   }, 0);
   
   // Total revenue is sum of tips and skip revenue
@@ -173,9 +173,14 @@ function calculateAnalyticsFromEvents(events: Array<{
   });
 
   // Revenue by step - separate tips and skip revenue
-  const revenueByStep = trailViews[0]?.data?.trailTitle ? Array(3).fill(0).map((_, index) => ({
+  // Determine the number of steps based on the highest step index seen
+  const revenueStepIndices = [...stepCompletions.map(e => (e.data.stepIndex as number) || 0), ...stepSkips.map(e => (e.data.stepIndex as number) || 0)];
+  const maxRevenueStepIndex = revenueStepIndices.length > 0 ? Math.max(...revenueStepIndices) : 0;
+  const numSteps = maxRevenueStepIndex + 1;
+  
+  const revenueByStep = trailViews[0]?.data?.trailTitle ? Array(numSteps).fill(0).map((_, index) => ({
     step: index,
-    title: index === 0 ? 'Step 1' : index === 1 ? 'Reward' : 'Step 2',
+    title: index === 0 ? 'Step 1' : index === 1 ? 'Reward' : `Step ${index + 1}`,
     skipRevenue: 0,
     tipRevenue: 0,
     revenue: 0
@@ -185,7 +190,7 @@ function calculateAnalyticsFromEvents(events: Array<{
   skipEvents.forEach(event => {
     const stepIndex = (event.data.stepIndex as number) || 0;
     if (revenueByStep[stepIndex]) {
-      const skipAmount = (event.data.skipAmount as number) || 0;
+      const skipAmount = (event.data.skipAmount as number) || (event.data.skipCost as number) || 0;
       revenueByStep[stepIndex].skipRevenue += skipAmount;
       revenueByStep[stepIndex].revenue += skipAmount;
     }
@@ -206,11 +211,19 @@ function calculateAnalyticsFromEvents(events: Array<{
   }, 0);
 
   // 4. COMPLETION RATE
-  const finalStepCompletions = stepCompletions.filter(e => (e.data.stepIndex as number) === 2); // Assuming 3 steps (0, 1, 2)
-  const completionRate = totalLearners > 0 ? (finalStepCompletions.length / totalLearners) * 100 : 0;
+  // Find the highest step index that was completed
+  const completedStepIndices = stepCompletions.map(e => (e.data.stepIndex as number) || 0);
+  const maxCompletedStep = completedStepIndices.length > 0 ? Math.max(...completedStepIndices) : -1;
+  
+  // Calculate completion rate based on completing any step (not just the final step)
+  const completionRate = totalLearners > 0 ? (stepCompletions.length / totalLearners) * 100 : 0;
 
   // 5. RETENTION RATE (how many people reached each step)
-  const stepReachCounts = [0, 0, 0]; // For 3 steps
+  // Determine the number of steps based on the highest step index seen
+  const retentionStepIndices = [...stepCompletions.map(e => (e.data.stepIndex as number) || 0), ...stepSkips.map(e => (e.data.stepIndex as number) || 0)];
+  const maxRetentionStepIndex = retentionStepIndices.length > 0 ? Math.max(...retentionStepIndices) : 0;
+  const stepReachCounts = new Array(maxRetentionStepIndex + 1).fill(0);
+  
   stepCompletions.forEach(event => {
     const stepIndex = event.data.stepIndex as number;
     if (stepIndex >= 0 && stepIndex < stepReachCounts.length) {
@@ -293,7 +306,7 @@ function calculateAnalyticsFromEvents(events: Array<{
   sortedSkipEvents.forEach(event => {
     const date = event.timestamp;
     const dayKey = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
-    const skipAmount = (event.data.skipAmount as number) || 0;
+    const skipAmount = (event.data.skipAmount as number) || (event.data.skipCost as number) || 0;
     revenueByDay.set(dayKey, (revenueByDay.get(dayKey) || 0) + skipAmount);
   });
   const revenueByDayArray = Array.from(revenueByDay.entries())

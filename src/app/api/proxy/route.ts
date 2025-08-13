@@ -12,6 +12,31 @@ export async function OPTIONS(request: NextRequest) {
   });
 }
 
+// Function to extract YouTube video ID
+function getYouTubeVideoId(url: string): string | null {
+  const patterns = [
+    /youtube\.com\/embed\/([a-zA-Z0-9_-]+)/,
+    /youtube\.com\/watch\?v=([a-zA-Z0-9_-]+)/,
+    /youtu\.be\/([a-zA-Z0-9_-]+)/,
+    /youtube\.com\/v\/([a-zA-Z0-9_-]+)/
+  ];
+  
+  for (const pattern of patterns) {
+    const match = url.match(pattern);
+    if (match) {
+      return match[1];
+    }
+  }
+  return null;
+}
+
+// Function to check if URL is an image
+function isImageUrl(url: string): boolean {
+  const imageExtensions = ['.jpg', '.jpeg', '.png', '.gif', '.webp', '.svg'];
+  const lowerUrl = url.toLowerCase();
+  return imageExtensions.some(ext => lowerUrl.includes(ext));
+}
+
 export async function GET(request: NextRequest) {
   const { searchParams } = new URL(request.url);
   const url = searchParams.get('url');
@@ -28,151 +53,125 @@ export async function GET(request: NextRequest) {
   }
 
   try {
-    console.log('🔍 Attempting to fetch thumbnail for URL:', url);
+    console.log('🔍 Attempting to fetch content for URL:', url);
     
-    // Try Microlink API for metadata extraction (NO screenshot initially, just content extraction)
-    const microlinkUrl = `https://api.microlink.io/?url=${encodeURIComponent(url)}&meta=true&palette=true`;
-    
-    const headers: Record<string, string> = {};
-    if (process.env.MICROLINK_API_KEY) {
-      headers['x-api-key'] = process.env.MICROLINK_API_KEY;
-    }
-    
-    const microlinkRes = await fetch(microlinkUrl, { headers });
-
-    if (!microlinkRes.ok) {
-      console.log('❌ Microlink API failed, status:', microlinkRes.status);
-      throw new Error(`Failed to fetch from Microlink API: ${microlinkRes.status}`);
-    }
-
-    // Parse JSON response for metadata (no direct images since we're not requesting screenshots)
-    const microlinkData = await microlinkRes.json();
-    console.log('📄 Microlink response:', JSON.stringify(microlinkData, null, 2));
-    
-    // Check if there's an embedded video first
-    const videoUrl = microlinkData.data?.video?.url;
-    if (videoUrl) {
-      console.log('🎥 Found embedded video:', videoUrl);
+    // Check if it's a YouTube URL first
+    const youtubeVideoId = getYouTubeVideoId(url);
+    if (youtubeVideoId) {
+      console.log('🎥 Found YouTube video ID:', youtubeVideoId);
       return NextResponse.json({ 
         type: 'video',
-        videoUrl,
-        title: microlinkData.data?.title,
-        description: microlinkData.data?.description
+        videoUrl: `https://www.youtube.com/embed/${youtubeVideoId}`,
+        title: 'YouTube Video',
+        description: 'Embedded YouTube video'
       });
     }
     
-    // Also check for YouTube embeds in the page content and URLs
-    const pageContent = microlinkData.data?.html || '';
-    const pageUrl = microlinkData.data?.url || url;
-    
-    // Check for various YouTube patterns
-    const youtubePatterns = [
-      /youtube\.com\/embed\/([a-zA-Z0-9_-]+)/,
-      /youtube\.com\/watch\?v=([a-zA-Z0-9_-]+)/,
-      /youtu\.be\/([a-zA-Z0-9_-]+)/,
-      /youtube\.com\/v\/([a-zA-Z0-9_-]+)/
-    ];
-    
-    // Check page content first
-    for (const pattern of youtubePatterns) {
-      const match = pageContent.match(pattern);
-      if (match) {
-        const videoId = match[1];
-        console.log('🎥 Found YouTube embed in page content:', videoId);
-        return NextResponse.json({ 
-          type: 'video',
-          videoUrl: `https://www.youtube.com/embed/${videoId}`,
-          title: microlinkData.data?.title || 'YouTube Video',
-          description: microlinkData.data?.description
-        });
-      }
-    }
-    
-    // Check if the main URL itself is a YouTube URL
-    for (const pattern of youtubePatterns) {
-      const match = pageUrl.match(pattern);
-      if (match) {
-        const videoId = match[1];
-        console.log('🎥 Found YouTube URL:', videoId);
-        return NextResponse.json({ 
-          type: 'video',
-          videoUrl: `https://www.youtube.com/embed/${videoId}`,
-          title: microlinkData.data?.title || 'YouTube Video',
-          description: microlinkData.data?.description
-        });
-      }
-    }
-    
-    // Try multiple image sources in order of preference (NO screenshots, only actual content)
-    const imageUrl = microlinkData.data?.image?.url || 
-                    microlinkData.data?.image ||
-                    microlinkData.data?.logo?.url ||
-                    microlinkData.data?.logo;
-
-    if (!imageUrl) {
-      console.log('❌ No content image found, trying screenshot as fallback');
-      
-      // Try screenshot as absolute fallback
-      const screenshotUrl = `https://api.microlink.io/?url=${encodeURIComponent(url)}&screenshot=true&embed=screenshot.url`;
-      
+    // Check if it's a direct image URL
+    if (isImageUrl(url)) {
+      console.log('🖼️ Direct image URL detected');
       try {
-        const screenshotRes = await fetch(screenshotUrl, { headers });
-        if (screenshotRes.ok) {
-          const screenshotData = await screenshotRes.json();
-          const fallbackImageUrl = screenshotData.data?.screenshot?.url;
+        const imageRes = await fetch(url);
+        
+        if (!imageRes.ok) {
+          throw new Error(`Failed to fetch image: ${imageRes.status}`);
+        }
+
+        const contentType = imageRes.headers.get('content-type');
+        if (!contentType?.startsWith('image/')) {
+          throw new Error('URL does not point to an image');
+        }
+
+        const imageBuffer = await imageRes.arrayBuffer();
+        console.log('✅ Successfully fetched image, size:', imageBuffer.byteLength, 'bytes');
+
+        return new NextResponse(imageBuffer, {
+          headers: {
+            'Content-Type': contentType,
+            'Access-Control-Allow-Origin': '*',
+          },
+        });
+      } catch (imageError) {
+        console.log('❌ Failed to fetch direct image:', imageError);
+        // Continue to fallback methods
+      }
+    }
+    
+    // Try to fetch the page and look for Open Graph images
+    try {
+      console.log('📄 Fetching page content to look for images...');
+      const pageRes = await fetch(url, {
+        headers: {
+          'User-Agent': 'Mozilla/5.0 (compatible; TrailBlaze/1.0)',
+        },
+        // Add timeout
+        signal: AbortSignal.timeout(10000) // 10 second timeout
+      });
+      
+      if (!pageRes.ok) {
+        throw new Error(`Failed to fetch page: ${pageRes.status}`);
+      }
+      
+      const html = await pageRes.text();
+      
+      // Look for Open Graph image tags
+      const ogImageMatch = html.match(/<meta[^>]*property=["']og:image["'][^>]*content=["']([^"']+)["'][^>]*>/i);
+      const twitterImageMatch = html.match(/<meta[^>]*name=["']twitter:image["'][^>]*content=["']([^"']+)["'][^>]*>/i);
+      const faviconMatch = html.match(/<link[^>]*rel=["'](?:icon|shortcut icon)["'][^>]*href=["']([^"']+)["'][^>]*>/i);
+      
+      let imageUrl = ogImageMatch?.[1] || twitterImageMatch?.[1] || faviconMatch?.[1];
+      
+      if (imageUrl) {
+        // Make relative URLs absolute
+        if (imageUrl.startsWith('/')) {
+          const urlObj = new URL(url);
+          imageUrl = `${urlObj.protocol}//${urlObj.host}${imageUrl}`;
+        } else if (imageUrl.startsWith('./')) {
+          const urlObj = new URL(url);
+          imageUrl = `${urlObj.protocol}//${urlObj.host}${urlObj.pathname.replace(/\/[^\/]*$/, '/')}${imageUrl.slice(2)}`;
+        }
+        
+        console.log('🖼️ Found image in page:', imageUrl);
+        
+        try {
+          const imageRes = await fetch(imageUrl);
           
-          if (fallbackImageUrl) {
-            console.log('📸 Using screenshot as fallback:', fallbackImageUrl);
-            const imageRes = await fetch(fallbackImageUrl);
-            
-            if (imageRes.ok) {
+          if (imageRes.ok) {
+            const contentType = imageRes.headers.get('content-type');
+            if (contentType?.startsWith('image/')) {
               const imageBuffer = await imageRes.arrayBuffer();
-              const finalContentType = imageRes.headers.get('content-type') || 'image/jpeg';
-              
+              console.log('✅ Successfully fetched page image, size:', imageBuffer.byteLength, 'bytes');
+
               return new NextResponse(imageBuffer, {
                 headers: {
-                  'Content-Type': finalContentType,
+                  'Content-Type': contentType,
                   'Access-Control-Allow-Origin': '*',
                 },
               });
             }
           }
+        } catch (imageError) {
+          console.log('❌ Failed to fetch page image:', imageError);
         }
-      } catch (screenshotError) {
-        console.log('❌ Screenshot fallback also failed:', screenshotError);
       }
       
-      return NextResponse.json({ error: 'No image found' }, { status: 404 });
+      // If no image found, return a simple JSON response
+      console.log('❌ No suitable image found on page');
+      return NextResponse.json({ 
+        type: 'webpage',
+        title: 'Webpage',
+        description: 'No preview image available'
+      });
+      
+    } catch (pageError) {
+      console.log('❌ Failed to fetch page content:', pageError);
+      return NextResponse.json({ 
+        type: 'webpage',
+        title: 'Webpage',
+        description: 'Unable to fetch preview'
+      });
     }
-
-    console.log('🖼️ Found image URL:', imageUrl);
-    console.log('📊 Available content sources:', {
-      imageUrl: microlinkData.data?.image?.url,
-      imageValue: microlinkData.data?.image,
-      logoUrl: microlinkData.data?.logo?.url,
-      logoValue: microlinkData.data?.logo,
-      videoUrl: microlinkData.data?.video?.url,
-      title: microlinkData.data?.title
-    });
-
-    const imageRes = await fetch(imageUrl);
     
-    if (!imageRes.ok) {
-      console.log('❌ Failed to fetch image, status:', imageRes.status);
-      throw new Error(`Failed to fetch image: ${imageRes.status}`);
-    }
-
-    const imageBuffer = await imageRes.arrayBuffer();
-    const finalContentType = imageRes.headers.get('content-type') || 'image/jpeg';
-
-    console.log('✅ Successfully fetched image, size:', imageBuffer.byteLength, 'bytes');
-
-    return new NextResponse(imageBuffer, {
-      headers: {
-        'Content-Type': finalContentType,
-        'Access-Control-Allow-Origin': '*',
-      },
-    });
   } catch (error) {
     console.error('❌ Proxy error:', error);
     return NextResponse.json({ 

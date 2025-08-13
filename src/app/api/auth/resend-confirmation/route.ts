@@ -29,7 +29,7 @@ export async function POST(request: NextRequest) {
       }
       
       const baseUrl = process.env.BASE_URL || 'http://localhost:3000';
-      const confirmationUrl = `${baseUrl}/api/auth/confirm-email?email=${encodeURIComponent(email)}`;
+              const confirmationUrl = `${baseUrl}/confirm-email?email=${encodeURIComponent(email)}`;
       console.log('Sending confirmation email to:', email);
       console.log('Confirmation URL:', confirmationUrl);
       

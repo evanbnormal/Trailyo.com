@@ -52,11 +52,12 @@ export async function GET(request: NextRequest) {
           confirmedAt: userData.confirmedAt
         };
         
-        // Redirect to simple confirmation page with user data
-        const baseUrl = process.env.BASE_URL || 'http://localhost:3000';
-        const redirectUrl = new URL('/email-confirmed', baseUrl);
-        redirectUrl.searchParams.set('userData', JSON.stringify(userDataForStorage));
-        return NextResponse.redirect(redirectUrl);
+        // Return user data for frontend to handle
+        return NextResponse.json({ 
+          success: true, 
+          message: 'Email confirmed successfully',
+          user: userDataForStorage
+        });
         
       } catch (dbError) {
         console.error('Database error during confirmation:', dbError);

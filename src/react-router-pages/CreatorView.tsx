@@ -367,14 +367,12 @@ const EditView: React.FC<{
   
   return (
       <CardContent className="p-4 sm:p-6 lg:p-10 space-y-3 sm:space-y-4 lg:space-y-8">
-      {step.source && (
-        <ContentPreview 
-          url={step.source} 
-          thumbnailUrl={step.thumbnailUrl}
-          onThumbnailUpdate={(newUrl) => updateStep(index, { thumbnailUrl: newUrl })}
-          className="my-0" 
-        />
-      )}
+      <ContentPreview 
+        url={step.source || ''} 
+        thumbnailUrl={step.thumbnailUrl}
+        onThumbnailUpdate={(newUrl) => updateStep(index, { thumbnailUrl: newUrl })}
+        className="my-0" 
+      />
       <div>
           <label className="text-base sm:text-lg lg:text-xl font-semibold text-black">
             {step.type === 'reward' ? 'Reward URL' : 'Content URL'}
@@ -461,14 +459,12 @@ const PreviewView: React.FC<{
       <div className="flex-grow">
         {step.type === 'reward' ? (
           <div className="text-center pt-0 pb-2 flex flex-col justify-center items-center">
-              {step.source && (
-                <ContentPreview 
-                  url={step.source} 
-                  className="mb-4 w-full" 
-                  thumbnailUrl={step.thumbnailUrl}
-                  onThumbnailUpdate={(newUrl) => updateStep(index, { thumbnailUrl: newUrl })}
-                />
-              )}
+              <ContentPreview 
+                url={step.source || ''} 
+                className="mb-4 w-full" 
+                thumbnailUrl={step.thumbnailUrl}
+                onThumbnailUpdate={(newUrl) => updateStep(index, { thumbnailUrl: newUrl })}
+              />
               <p className="text-base sm:text-lg mb-4" style={{ color: '#D4AF37' }}>{step.content}</p>
               <motion.div
                 whileHover={{ scale: 1.05 }}
@@ -484,13 +480,11 @@ const PreviewView: React.FC<{
           </div>
         ) : (
           <>
-            {step.source && (
-              <ContentPreview 
-                url={step.source} 
-                thumbnailUrl={step.thumbnailUrl}
-                onThumbnailUpdate={(newUrl) => updateStep(index, { thumbnailUrl: newUrl })}
-              />
-            )}
+            <ContentPreview 
+              url={step.source || ''} 
+              thumbnailUrl={step.thumbnailUrl}
+              onThumbnailUpdate={(newUrl) => updateStep(index, { thumbnailUrl: newUrl })}
+            />
             <p className="mt-6 text-lg sm:text-xl">{step.content}</p>
           </>
         )}
