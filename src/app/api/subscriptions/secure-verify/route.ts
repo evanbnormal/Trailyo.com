@@ -157,21 +157,45 @@ export async function POST(request: NextRequest): Promise<NextResponse<SecureVer
         console.log(`📋 Found existing Stripe subscription: ${stripeSubscription.id}`);
       } else {
         // Create new subscription
-        stripeSubscription = await stripe.subscriptions.create({
+        console.log(`🔧 Creating subscription with:`, {
           customer: subscription.stripeCustomerId,
-          items: [{ price: priceId }],
-          trial_period_days: 14,
-          default_payment_method: matchingSetupIntent.payment_method as string,
+          priceId,
+          paymentMethod: matchingSetupIntent.payment_method,
           metadata: {
             userId: userId,
             sessionId: sessionId,
             subscription_type: 'creator',
             setup_intent_id: matchingSetupIntent.id,
             secure_flow: 'true',
-          },
+          }
         });
 
-        console.log(`🎉 Created new Stripe subscription: ${stripeSubscription.id}`);
+        try {
+          stripeSubscription = await stripe.subscriptions.create({
+            customer: subscription.stripeCustomerId,
+            items: [{ price: priceId }],
+            trial_period_days: 14,
+            default_payment_method: matchingSetupIntent.payment_method as string,
+            metadata: {
+              userId: userId,
+              sessionId: sessionId,
+              subscription_type: 'creator',
+              setup_intent_id: matchingSetupIntent.id,
+              secure_flow: 'true',
+            },
+          });
+
+          console.log(`🎉 Created new Stripe subscription: ${stripeSubscription.id}`);
+        } catch (subscriptionError: any) {
+          console.error('❌ Stripe subscription creation failed:', {
+            error: subscriptionError.message,
+            code: subscriptionError.code,
+            type: subscriptionError.type,
+            decline_code: subscriptionError.decline_code,
+            param: subscriptionError.param
+          });
+          throw subscriptionError;
+        }
       }
 
       // Step 4: Update database with complete subscription info
