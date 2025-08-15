@@ -92,12 +92,16 @@ export async function POST(request: NextRequest): Promise<NextResponse<SecureVer
 
       const matchingSetupIntent = setupIntents.data.find(si => 
         si.metadata?.sessionId === sessionId && 
-        si.metadata?.userId === userId &&
-        si.metadata?.secure_flow === 'true'
+        si.metadata?.userId === userId
       );
 
       if (!matchingSetupIntent) {
         console.log(`❓ No matching setup intent found for session: ${sessionId}`);
+        console.log(`🔍 Available setup intents:`, setupIntents.data.map(si => ({
+          id: si.id,
+          status: si.status,
+          metadata: si.metadata
+        })));
         return NextResponse.json({
           status: 'processing',
           message: 'Payment setup not yet complete',
