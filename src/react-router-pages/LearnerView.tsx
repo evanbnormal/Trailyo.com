@@ -194,6 +194,7 @@ const LearnerView: React.FC = () => {
         if (response.ok) {
           const publicTrail = await response.json();
           console.log('Found trail via public API:', publicTrail.title);
+          console.log('Trail steps:', publicTrail.steps?.map((s: any, i: number) => `${i + 1}. ${s.title} (${s.type})`));
           
           if (isMounted) {
             setTrail(publicTrail);
@@ -257,6 +258,8 @@ const LearnerView: React.FC = () => {
                   creator_id: savedTrail.creator_id || savedTrail.creatorId || user?.id,
                   creator: savedTrail.creator || 'Unknown Creator'
                 };
+                console.log('Trail steps from saved trails:', trailWithCreator.steps?.map((s: any, i: number) => `${i + 1}. ${s.title} (${s.type})`));
+                console.log('Trail steps from user trails:', trailWithCreator.steps?.map((s: any, i: number) => `${i + 1}. ${s.title} (${s.type})`));
                 setTrail(trailWithCreator);
                 setTrailLoaded(true);
                 

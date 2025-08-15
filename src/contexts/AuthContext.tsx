@@ -479,7 +479,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
         localStorage.setItem(localStoragePublishedKey, JSON.stringify(published));
       }
 
-              toast.success(`Trail ${type === 'draft' ? 'saved' : 'published'} to database successfully!`);
+              toast.success(type === 'draft' ? 'Trail saved to your drafts' : 'Trail published!');
     } catch (error) {
       console.error('❌ Database save failed, falling back to localStorage:', error);
       
