@@ -5,6 +5,7 @@ import { Badge } from './ui/badge';
 import { Check, Star, Zap, Users, BarChart3, Crown, X } from 'lucide-react';
 import SubscriptionPaymentModal from './SubscriptionPaymentModal';
 import { useSecureSubscription } from '../hooks/useSecureSubscription';
+import { useSubscription } from '../hooks/useSubscription';
 import { useToast } from '../hooks/use-toast';
 import { useAuth } from '../contexts/AuthContext';
 
@@ -25,6 +26,7 @@ const SubscriptionModal: React.FC<SubscriptionModalProps> = ({
   const [clientSecret, setClientSecret] = useState<string>('');
   const [sessionId, setSessionId] = useState<string>('');
   const { isLoading: secureLoading, startSecureSubscription, verifySecureSubscription } = useSecureSubscription();
+  const { refreshSubscriptionStatus } = useSubscription();
   const { toast } = useToast();
   const { user } = useAuth();
 
@@ -82,6 +84,9 @@ const SubscriptionModal: React.FC<SubscriptionModalProps> = ({
       const verificationSuccess = await verifySecureSubscription(sessionId);
       
       if (verificationSuccess) {
+        // Force refresh subscription status to update UI immediately
+        await refreshSubscriptionStatus();
+        
         toast({
           title: "Welcome to Creator!",
           description: "Your free trial has started successfully!",
