@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { useAuth } from '../contexts/AuthContext';
-import { useSubscription } from '../hooks/useSubscription';
+import { useSubscription, clearSubscriptionCache } from '../hooks/useSubscription';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../components/ui/tabs';
 import { Button } from '../components/ui/button';
@@ -41,7 +41,7 @@ interface PaymentMethod {
 
 export default function SettingsPage() {
   const { user, logout } = useAuth();
-  const { subscriptionStatus, isLoading: subscriptionLoading } = useSubscription();
+  const { subscriptionStatus, isLoading: subscriptionLoading, refreshSubscriptionStatus } = useSubscription();
   const { toast } = useToast();
   
   const [isUpdating, setIsUpdating] = useState(false);
@@ -137,6 +137,44 @@ export default function SettingsPage() {
       });
 
       if (response.ok) {
+
+  const handleDebugSubscription = async () => {
+    if (!user?.id) return;
+    
+    try {
+      // Clear cache first
+      clearSubscriptionCache();
+      
+      // Call debug endpoint
+      const params = new URLSearchParams({
+        userId: user.id,
+        ...(user.email && { email: user.email })
+      });
+      
+      const response = await fetch(`/api/debug-subscription-status?${params}`);
+      const debugData = await response.json();
+      
+      console.log('🔍 DEBUG SUBSCRIPTION DATA:', debugData);
+      
+      // Show debug info in toast
+      toast({
+        title: "Debug Info",
+        description: `Status: ${debugData.calculatedStatus?.status || 'unknown'}, Subscribed: ${debugData.calculatedStatus?.isSubscribed || false}`,
+        duration: 5000,
+      });
+      
+      // Force refresh subscription status
+      await refreshSubscriptionStatus();
+      
+    } catch (error) {
+      console.error('Debug subscription error:', error);
+      toast({
+        title: "Debug Error",
+        description: "Failed to debug subscription status",
+        variant: "destructive",
+      });
+    }
+  };
         const result = await response.json();
         if (result.user) {
           // Update the user context with new data
@@ -474,10 +512,21 @@ export default function SettingsPage() {
                     </p>
                   </div>
                 </div>
-                <Badge variant={subscriptionStatus.isSubscribed || subscriptionStatus.isTrialing ? "default" : "secondary"}>
-                  {subscriptionStatus.isTrialing ? 'Trial' : 
-                   subscriptionStatus.isSubscribed ? 'Active' : 'Free'}
-                </Badge>
+                <div className="flex items-center gap-2">
+                  <Badge variant={subscriptionStatus.isSubscribed || subscriptionStatus.isTrialing ? "default" : "secondary"}>
+                    {subscriptionStatus.isTrialing ? 'Trial' : 
+                     subscriptionStatus.isSubscribed ? 'Active' : 'Free'}
+                  </Badge>
+                  <Button 
+                    variant="outline" 
+                    size="sm" 
+                    onClick={handleDebugSubscription}
+                    className="text-xs"
+                  >
+                    <RefreshCw className="h-3 w-3 mr-1" />
+                    Debug
+                  </Button>
+                </div>
               </div>
 
               {subscriptionStatus.isSubscribed || subscriptionStatus.isTrialing && (

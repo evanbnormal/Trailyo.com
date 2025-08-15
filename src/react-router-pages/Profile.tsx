@@ -21,13 +21,15 @@ import {
   Copy,
   FileText,
   Crown,
-  Gift
+  Gift,
+  Lock
 } from 'lucide-react';
 import { Link, useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
 import { useAuth } from '@/contexts/AuthContext';
 import { useSubscription } from '@/hooks/useSubscription';
 import { SavedTrailCard } from '@/components/TrailCard';
+import SubscriptionModal from '@/components/SubscriptionModal';
 
 interface TrailStep {
   id: string;
@@ -66,6 +68,7 @@ const Profile: React.FC = () => {
   const [showThumbnailDialog, setShowThumbnailDialog] = useState(false);
   const [selectedTrail, setSelectedTrail] = useState<Trail | null>(null);
   const [showDeleteSavedDialog, setShowDeleteSavedDialog] = useState(false);
+  const [showSubscriptionModal, setShowSubscriptionModal] = useState(false);
   const navigate = useNavigate();
   const { user, getUserTrails, saveUserTrail, deleteUserTrail, permanentlyDeleteTrail } = useAuth();
   const { subscriptionStatus, canCreateTrails, isLoading: subscriptionLoading, refreshSubscriptionStatus } = useSubscription();
@@ -697,12 +700,23 @@ const Profile: React.FC = () => {
           
           {/* Create New Trail Button */}
           <div className="flex gap-2">
-            <Link to="/creator">
-              <Button className="bg-black text-white hover:bg-black/90">
+            <Button 
+              className="bg-black text-white hover:bg-black/90"
+              onClick={() => {
+                if (!canCreateTrails()) {
+                  setShowSubscriptionModal(true);
+                } else {
+                  navigate('/creator');
+                }
+              }}
+            >
+              {!canCreateTrails() ? (
+                <Lock className="h-4 w-4 mr-2" />
+              ) : (
                 <Plus className="h-4 w-4 mr-2" />
-                Create New Trail
-              </Button>
-            </Link>
+              )}
+              {!canCreateTrails() ? 'Upgrade to Create' : 'Create New Trail'}
+            </Button>
           </div>
         </div>
 
@@ -908,6 +922,20 @@ const Profile: React.FC = () => {
       </Dialog>
       
       {/* Debug components removed - subscription status now working */}
+      
+      {/* Subscription Modal */}
+      <SubscriptionModal
+        open={showSubscriptionModal}
+        onOpenChange={setShowSubscriptionModal}
+        onSubscribe={() => {
+          // After successful subscription, refresh status and navigate to creator
+          refreshSubscriptionStatus().then(() => {
+            if (canCreateTrails()) {
+              navigate('/creator');
+            }
+          });
+        }}
+      />
     </div>
   );
 };
