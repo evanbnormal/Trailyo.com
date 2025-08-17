@@ -1084,6 +1084,7 @@ const LearnerView: React.FC = () => {
                     title: "Thank you!",
                     description: `You've successfully tipped $${tipAmount || trail?.suggestedInvestment || 25} to ${getCreatorName(trail?.creator)}!`,
                   });
+                  analyticsService.trackTipDonated(trail?.id || '', tipAmount);
                   setTipCompleted(true);
                   setShowTipModal(false);
                   showTipModalRef.current = false;
