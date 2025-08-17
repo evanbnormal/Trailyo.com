@@ -15,7 +15,7 @@ export interface TrailAnalytics {
   completionRate: number;
   completionRateOverTime: Array<{ date: string; completionRate: number }>;
   totalWatchTime: number; // in minutes
-  stepRetention: Array<{
+  retentionByStep: Array<{
     stepIndex: number;
     stepTitle: string;
     learnersReached: number;
