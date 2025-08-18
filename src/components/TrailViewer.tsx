@@ -9,6 +9,7 @@ import { Card, CardContent, CardHeader, CardTitle } from './ui/card';
 import { AspectRatio } from './ui/aspect-ratio';
 import { ArrowRight, ArrowLeft, Play, Youtube, Eye, EyeOff, Lock, Check, Coins, ArrowUpRight, ArrowDownLeft } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
+import { analyticsService } from '@/lib/analytics';
 
 interface TrailViewerProps {
   trail: Trail;
@@ -30,7 +31,9 @@ const TrailViewer: React.FC<TrailViewerProps> = ({ trail }) => {
 
   useEffect(() => {
     setShowInvestmentModal(true);
-  }, []);
+    // Track trail view
+    analyticsService.trackTrailView(trail.id, trail.title);
+  }, [trail.id, trail.title]);
 
   const handleInvest = (amount: number) => {
     setInvestedAmount(amount);
@@ -38,8 +41,19 @@ const TrailViewer: React.FC<TrailViewerProps> = ({ trail }) => {
   };
 
   const handleNext = () => {
+    // Track step completion
+    analyticsService.trackStepComplete(trail.id, currentStepIndex, currentStep.title);
+    
+    // Track video completion if this is a video step
+    if (currentStep.type === 'video' && videoProgress[currentStepIndex] >= 80) {
+      const watchTimeMinutes = (videoProgress[currentStepIndex] / 100) * 5; // Assuming 5 minute video
+      analyticsService.trackVideoWatch(trail.id, currentStepIndex, currentStep.title, watchTimeMinutes);
+    }
+    
     if (isLastStep) {
       setCompleted(true);
+      // Track trail completion
+      analyticsService.trackTrailComplete(trail.id);
     } else {
       setCurrentStepIndex(prev => prev + 1);
     }
