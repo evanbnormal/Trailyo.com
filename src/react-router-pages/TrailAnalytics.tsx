@@ -1459,8 +1459,8 @@ const TrailAnalytics: React.FC = () => {
               <div className="text-center">
                 <div className="text-2xl font-bold text-red-600">
                   {revenueTimeToggle === 'all' 
-                    ? `${realAnalytics?.stepRetention?.[0]?.retentionRate?.toFixed(1) || '0.0'}%`
-                    : `${realAnalytics?.stepRetention?.[0]?.retentionRate?.toFixed(1) || '0.0'}%`
+                    ? `${realAnalytics?.retentionByStep?.[0]?.retentionRate?.toFixed(1) || '0.0'}%`
+                    : `${realAnalytics?.retentionByStep?.[0]?.retentionRate?.toFixed(1) || '0.0'}%`
                   }
                 </div>
                 <div className="text-sm text-gray-600">
@@ -1471,7 +1471,7 @@ const TrailAnalytics: React.FC = () => {
             <CardContent>
               <div className={`${chartHeight} w-full`}>
                 <ResponsiveContainer width="100%" height="100%">
-                  <LineChart data={realAnalytics?.stepRetention?.map(item => ({
+                  <LineChart data={realAnalytics?.retentionByStep?.map(item => ({
                     step: item.step,
                     retentionRate: item.retentionRate,
                     learnersReached: item.learnersReached
@@ -1927,7 +1927,7 @@ const TrailAnalytics: React.FC = () => {
                         <BarChart3 className="h-5 w-5 text-red-600" />
                         <div className="flex-1">
                           <p className="text-sm font-medium text-gray-900">Retention Rate</p>
-                          <p className="text-lg font-bold text-red-600">{realAnalytics?.stepRetention?.[0]?.retentionRate?.toFixed(1) || '0.0'}%</p>
+                          <p className="text-lg font-bold text-red-600">{realAnalytics?.retentionByStep?.[0]?.retentionRate?.toFixed(1) || '0.0'}%</p>
                         </div>
                       </div>
                     </div>

@@ -231,7 +231,7 @@ function calculateAnalyticsFromEvents(events: Array<{
     }
   });
 
-  const retentionRate = stepReachCounts.map((count, index) => ({
+  const retentionByStep = stepReachCounts.map((count, index) => ({
     step: index,
     learnersReached: count,
     retentionRate: totalLearners > 0 ? (count / totalLearners) * 100 : 0
@@ -326,7 +326,7 @@ function calculateAnalyticsFromEvents(events: Array<{
     totalSkipRevenue,
     totalWatchTime,
     completionRate,
-    retentionRate,
+    retentionByStep,
     revenueByStep,
     completionRateByDay: completionRateByDay,
     watchTimeByDay: watchTimeByDayArray,
