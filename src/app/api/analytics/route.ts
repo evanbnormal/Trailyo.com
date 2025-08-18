@@ -139,9 +139,6 @@ function calculateAnalyticsFromEvents(events: Array<{
       }
     }
   });
-  if (videoWatches.length > 0 || stepSkips.length > 0 || tips.length > 0 || stepCompletions.length > 0) {
-    activeSessionIds.add('active_learner');
-  }
   const totalLearners = activeSessionIds.size;
 
   console.log('📊 Trail views found:', trailViews.length);
@@ -246,7 +243,7 @@ function calculateAnalyticsFromEvents(events: Array<{
   });
   
   // Calculate completion rate based on unique users who reached the final step
-  const completionRate = totalLearners > 0 ? (usersWhoReachedFinalStep.size / totalLearners) * 100 : 0;
+  const completionRate = totalLearners > 0 ? Math.min((usersWhoReachedFinalStep.size / totalLearners) * 100, 100) : 0;
 
   console.log('📊 Completion rate calculation:', {
     totalLearners,
@@ -300,7 +297,7 @@ function calculateAnalyticsFromEvents(events: Array<{
   const retentionRate = stepReachCounts.map((count, index) => ({
     step: index,
     learnersReached: count,
-    retentionRate: totalLearners > 0 ? (count / totalLearners) * 100 : 0
+    retentionRate: totalLearners > 0 ? Math.min((count / totalLearners) * 100, 100) : 0
   }));
 
   // 6. DAILY AGGREGATION
