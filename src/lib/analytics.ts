@@ -66,28 +66,47 @@ class AnalyticsService {
   }
 
   // Track when someone completes a step
-  async trackStepComplete(trailId: string, stepIndex: number, stepTitle: string): Promise<void> {
-    await this.recordEvent(trailId, 'step_complete', { stepIndex, stepTitle });
+  async trackStepComplete(trailId: string, stepIndex: number, stepTitle: string, sessionId?: string): Promise<void> {
+    await this.recordEvent(trailId, 'step_complete', { 
+      stepIndex, 
+      stepTitle, 
+      sessionId: sessionId || `session_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
+    });
   }
 
   // Track when someone skips a step (revenue)
-  async trackStepSkip(trailId: string, stepIndex: number, stepTitle: string, skipCost: number): Promise<void> {
-    await this.recordEvent(trailId, 'step_skip', { stepIndex, stepTitle, skipCost });
+  async trackStepSkip(trailId: string, stepIndex: number, stepTitle: string, skipCost: number, sessionId?: string): Promise<void> {
+    await this.recordEvent(trailId, 'step_skip', { 
+      stepIndex, 
+      stepTitle, 
+      skipCost,
+      sessionId: sessionId || `session_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
+    });
   }
 
   // Track when someone donates a tip
-  async trackTipDonated(trailId: string, tipAmount: number): Promise<void> {
-    await this.recordEvent(trailId, 'tip_donated', { tipAmount });
+  async trackTipDonated(trailId: string, tipAmount: number, sessionId?: string): Promise<void> {
+    await this.recordEvent(trailId, 'tip_donated', { 
+      tipAmount,
+      sessionId: sessionId || `session_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
+    });
   }
 
   // Track when someone completes the entire trail
-  async trackTrailComplete(trailId: string): Promise<void> {
-    await this.recordEvent(trailId, 'trail_complete', {});
+  async trackTrailComplete(trailId: string, sessionId?: string): Promise<void> {
+    await this.recordEvent(trailId, 'trail_complete', { 
+      sessionId: sessionId || `session_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
+    });
   }
 
   // Track video watch time
-  async trackVideoWatch(trailId: string, stepIndex: number, stepTitle: string, watchTime: number): Promise<void> {
-    await this.recordEvent(trailId, 'video_watch', { stepIndex, stepTitle, watchTime });
+  async trackVideoWatch(trailId: string, stepIndex: number, stepTitle: string, watchTime: number, sessionId?: string): Promise<void> {
+    await this.recordEvent(trailId, 'video_watch', { 
+      stepIndex, 
+      stepTitle, 
+      watchTime,
+      sessionId: sessionId || `session_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
+    });
   }
 
   // Debug analytics - call this from browser console to test

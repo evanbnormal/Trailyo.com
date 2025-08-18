@@ -218,7 +218,7 @@ function calculateAnalyticsFromEvents(events: Array<{
   const allStepIndices = [...completedStepIndices, ...skippedStepIndices];
   const maxStepIndex = allStepIndices.length > 0 ? Math.max(...allStepIndices) : -1;
   
-  // Count users who reached the final step (either by completing or skipping)
+  // Count unique users who reached the final step (either by completing or skipping)
   const usersWhoReachedFinalStep = new Set();
   
   // Add users who completed the final step
@@ -245,15 +245,13 @@ function calculateAnalyticsFromEvents(events: Array<{
     if (sessionId) usersWhoReachedFinalStep.add(sessionId);
   });
   
-  // Calculate completion rate based on reaching the final step or completing the trail
-  const totalCompletions = usersWhoReachedFinalStep.size + trailCompletions.length;
-  const completionRate = totalLearners > 0 ? (totalCompletions / totalLearners) * 100 : 0;
+  // Calculate completion rate based on unique users who reached the final step
+  const completionRate = totalLearners > 0 ? (usersWhoReachedFinalStep.size / totalLearners) * 100 : 0;
 
   console.log('📊 Completion rate calculation:', {
     totalLearners,
     usersWhoReachedFinalStep: Array.from(usersWhoReachedFinalStep),
     trailCompletionsCount: trailCompletions.length,
-    totalCompletions,
     completionRate,
     maxStepIndex
   });
@@ -264,29 +262,39 @@ function calculateAnalyticsFromEvents(events: Array<{
   const maxRetentionStepIndex = retentionStepIndices.length > 0 ? Math.max(...retentionStepIndices) : 0;
   const stepReachCounts = new Array(maxRetentionStepIndex + 1).fill(0);
   
-  // Count users who completed steps
+  // Track unique users per step to avoid double counting
+  const stepUserSets = new Array(maxRetentionStepIndex + 1).fill(null).map(() => new Set<string>());
+  
+  // Count unique users who completed steps
   stepCompletions.forEach(event => {
     const stepIndex = event.data.stepIndex as number;
-    if (stepIndex >= 0 && stepIndex < stepReachCounts.length) {
-      stepReachCounts[stepIndex]++;
+    const sessionId = event.data.sessionId as string;
+    if (stepIndex >= 0 && stepIndex < stepReachCounts.length && sessionId) {
+      stepUserSets[stepIndex].add(sessionId);
     }
   });
 
-  // Count users who skipped to steps (including reward step)
+  // Count unique users who skipped to steps (including reward step)
   stepSkips.forEach(event => {
     const stepIndex = event.data.stepIndex as number;
-    if (stepIndex >= 0 && stepIndex < stepReachCounts.length) {
-      stepReachCounts[stepIndex]++;
+    const sessionId = event.data.sessionId as string;
+    if (stepIndex >= 0 && stepIndex < stepReachCounts.length && sessionId) {
+      stepUserSets[stepIndex].add(sessionId);
     }
   });
 
-  // Count users who tipped (indicates they reached the reward step - step 1)
+  // Count unique users who tipped (indicates they reached the reward step - step 1)
   tipEvents.forEach(event => {
-    // Tips are always for the reward step (step 1)
+    const sessionId = event.data.sessionId as string;
     const rewardStepIndex = 1;
-    if (rewardStepIndex < stepReachCounts.length) {
-      stepReachCounts[rewardStepIndex]++;
+    if (rewardStepIndex < stepReachCounts.length && sessionId) {
+      stepUserSets[rewardStepIndex].add(sessionId);
     }
+  });
+
+  // Convert sets to counts
+  stepUserSets.forEach((userSet, index) => {
+    stepReachCounts[index] = userSet.size;
   });
 
   const retentionRate = stepReachCounts.map((count, index) => ({
