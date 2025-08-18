@@ -300,6 +300,12 @@ function calculateAnalyticsFromEvents(events: Array<{
     retentionRate: totalLearners > 0 ? Math.min((count / totalLearners) * 100, 100) : 0
   }));
 
+  console.log('📊 Retention rate calculation:', {
+    totalLearners,
+    stepReachCounts,
+    retentionRate: retentionRate.map(r => ({ step: r.step, learnersReached: r.learnersReached, retentionRate: r.retentionRate }))
+  });
+
   // 6. DAILY AGGREGATION
   const dailyCompletions = new Map<string, number>();
   const dailyLearners = new Map<string, number>();
@@ -413,7 +419,7 @@ function calculateAnalyticsFromEvents(events: Array<{
     totalSkipRevenue,
     totalWatchTime,
     completionRate,
-    retentionRate,
+    retentionByStep: retentionRate,
     revenueByStep,
     completionRateByDay: completionRateByDay,
     watchTimeByDay: watchTimeByDayArray,
