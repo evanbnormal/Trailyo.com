@@ -126,23 +126,49 @@ function calculateAnalyticsFromEvents(events: Array<{
   const stepCompletions = events.filter(e => e.eventType === 'step_complete');
   const trailCompletions = events.filter(e => e.eventType === 'trail_complete');
 
-  const activeSessionIds = new Set();
-  trailViews.forEach(trailView => {
-    const sessionId = trailView.data.sessionId as string;
-    if (sessionId) {
-      const hasActions = videoWatches.some(e => e.data.sessionId === sessionId) ||
-                       stepSkips.some(e => e.data.sessionId === sessionId) ||
-                       tips.some(e => e.data.sessionId === sessionId) ||
-                       stepCompletions.some(e => e.data.sessionId === sessionId);
-      if (hasActions) {
-        activeSessionIds.add(sessionId);
-      }
-    }
+  // Count unique session IDs from all event types
+  const allSessionIds = new Set();
+  
+  // Add session IDs from trail views
+  trailViews.forEach(event => {
+    const sessionId = event.data.sessionId as string;
+    if (sessionId) allSessionIds.add(sessionId);
   });
-  const totalLearners = activeSessionIds.size;
+  
+  // Add session IDs from video watches
+  videoWatches.forEach(event => {
+    const sessionId = event.data.sessionId as string;
+    if (sessionId) allSessionIds.add(sessionId);
+  });
+  
+  // Add session IDs from step skips
+  stepSkips.forEach(event => {
+    const sessionId = event.data.sessionId as string;
+    if (sessionId) allSessionIds.add(sessionId);
+  });
+  
+  // Add session IDs from tips
+  tips.forEach(event => {
+    const sessionId = event.data.sessionId as string;
+    if (sessionId) allSessionIds.add(sessionId);
+  });
+  
+  // Add session IDs from step completions
+  stepCompletions.forEach(event => {
+    const sessionId = event.data.sessionId as string;
+    if (sessionId) allSessionIds.add(sessionId);
+  });
+  
+  // Add session IDs from trail completions
+  trailCompletions.forEach(event => {
+    const sessionId = event.data.sessionId as string;
+    if (sessionId) allSessionIds.add(sessionId);
+  });
+  
+  const totalLearners = allSessionIds.size;
 
   console.log('📊 Trail views found:', trailViews.length);
-  console.log('📊 Active session IDs:', Array.from(activeSessionIds));
+  console.log('📊 All session IDs:', Array.from(allSessionIds));
   console.log('📊 Total active learners calculated:', totalLearners);
 
   // 2. REVENUE CALCULATION - SEPARATE TIPS AND SKIP REVENUE
