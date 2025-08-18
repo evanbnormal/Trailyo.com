@@ -24,6 +24,9 @@ const TrailViewer: React.FC<TrailViewerProps> = ({ trail }) => {
   const [videoProgress, setVideoProgress] = useState<{ [key: number]: number }>({});
   const [videoCompleted, setVideoCompleted] = useState<{ [key: number]: boolean }>({});
   const playersRef = useRef<{ [key: number]: any }>({});
+  
+  // Generate a consistent session ID for this user session
+  const sessionId = useRef(`session_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`).current;
 
   const currentStep = trail.steps[currentStepIndex];
   const isFirstStep = currentStepIndex === 0;
@@ -32,8 +35,8 @@ const TrailViewer: React.FC<TrailViewerProps> = ({ trail }) => {
   useEffect(() => {
     setShowInvestmentModal(true);
     // Track trail view
-    analyticsService.trackTrailView(trail.id, trail.title);
-  }, [trail.id, trail.title]);
+    analyticsService.trackTrailView(trail.id, trail.title, sessionId);
+  }, [trail.id, trail.title, sessionId]);
 
   const handleInvest = (amount: number) => {
     setInvestedAmount(amount);
@@ -42,18 +45,18 @@ const TrailViewer: React.FC<TrailViewerProps> = ({ trail }) => {
 
   const handleNext = () => {
     // Track step completion
-    analyticsService.trackStepComplete(trail.id, currentStepIndex, currentStep.title);
+    analyticsService.trackStepComplete(trail.id, currentStepIndex, currentStep.title, sessionId);
     
     // Track video completion if this is a video step
     if (currentStep.type === 'video' && videoProgress[currentStepIndex] >= 80) {
       const watchTimeMinutes = (videoProgress[currentStepIndex] / 100) * 5; // Assuming 5 minute video
-      analyticsService.trackVideoWatch(trail.id, currentStepIndex, currentStep.title, watchTimeMinutes);
+      analyticsService.trackVideoWatch(trail.id, currentStepIndex, currentStep.title, watchTimeMinutes, sessionId);
     }
     
     if (isLastStep) {
       setCompleted(true);
       // Track trail completion
-      analyticsService.trackTrailComplete(trail.id);
+      analyticsService.trackTrailComplete(trail.id, sessionId);
     } else {
       setCurrentStepIndex(prev => prev + 1);
     }

@@ -54,14 +54,14 @@ class AnalyticsService {
   }
 
   // Track when someone views a trail
-  async trackTrailView(trailId: string, trailTitle: string): Promise<void> {
-    // Generate a unique session ID that includes timestamp to ensure uniqueness
-    const sessionId = `session_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
-    console.log('🔍 Tracking trail view:', { trailId, trailTitle, sessionId });
+  async trackTrailView(trailId: string, trailTitle: string, sessionId?: string): Promise<void> {
+    // Use provided sessionId or generate a unique session ID
+    const finalSessionId = sessionId || `session_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+    console.log('🔍 Tracking trail view:', { trailId, trailTitle, sessionId: finalSessionId });
     await this.recordEvent(trailId, 'trail_view', { 
       trailTitle,
       timestamp: Date.now(),
-      sessionId: sessionId // Generate unique session ID for each visit
+      sessionId: finalSessionId
     });
   }
 
