@@ -90,6 +90,64 @@ class AnalyticsService {
     await this.recordEvent(trailId, 'video_watch', { stepIndex, stepTitle, watchTime });
   }
 
+  // Debug analytics - call this from browser console to test
+  async debugAnalytics(): Promise<void> {
+    try {
+      console.log('🔍 Starting analytics debug...');
+      
+      // Test the debug endpoint
+      const debugResponse = await fetch('/api/debug-analytics');
+      const debugData = await debugResponse.json();
+      
+      console.log('🔍 Debug endpoint response:', debugData);
+      
+      // Test creating an event
+      const testResponse = await fetch('/api/debug-analytics', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          trailId: 'debug-trail-' + Date.now(),
+          eventType: 'trail_view',
+          action: { debug: true, timestamp: Date.now() }
+        })
+      });
+      
+      const testData = await testResponse.json();
+      console.log('🔍 Test event creation response:', testData);
+      
+      // Test the main analytics endpoint
+      const analyticsResponse = await fetch('/api/analytics?trailId=debug-trail');
+      const analyticsData = await analyticsResponse.json();
+      
+      console.log('🔍 Analytics endpoint response:', analyticsData);
+      
+      console.log('✅ Analytics debug completed');
+      
+    } catch (error) {
+      console.error('❌ Analytics debug failed:', error);
+    }
+  }
+
+  // Test analytics functionality
+  async testAnalytics(): Promise<void> {
+    try {
+      console.log('🧪 Testing analytics service...');
+      
+      // Test trail view
+      await this.trackTrailView('test-trail', 'Test Trail');
+      
+      // Test step completion
+      await this.trackStepComplete('test-trail', 0, 'Test Step');
+      
+      // Test video watch
+      await this.trackVideoWatch('test-trail', 0, 'Test Video', 2.5);
+      
+      console.log('✅ Analytics test completed successfully');
+    } catch (error) {
+      console.error('❌ Analytics test failed:', error);
+    }
+  }
+
   // Get analytics for a specific trail
   async getTrailAnalytics(trailId: string): Promise<TrailAnalytics | null> {
     try {
@@ -141,6 +199,11 @@ class AnalyticsService {
   private async recordEvent(trailId: string, eventType: AnalyticsEvent['eventType'], data: any): Promise<void> {
     try {
       console.log('📤 Sending analytics event:', { trailId, eventType, data });
+      console.log('📤 Environment check:', { 
+        isClient: typeof window !== 'undefined',
+        baseUrl: typeof window !== 'undefined' ? window.location.origin : 'server',
+        timestamp: new Date().toISOString()
+      });
       
       const response = await fetch('/api/analytics', {
         method: 'POST',
@@ -154,8 +217,13 @@ class AnalyticsService {
         }),
       });
       
+      console.log('📤 Analytics API response status:', response.status);
+      console.log('📤 Analytics API response headers:', Object.fromEntries(response.headers.entries()));
+      
       if (!response.ok) {
-        throw new Error(`Analytics API error: ${response.status} ${response.statusText}`);
+        const errorText = await response.text();
+        console.error('📤 Analytics API error response:', errorText);
+        throw new Error(`Analytics API error: ${response.status} ${response.statusText} - ${errorText}`);
       }
       
       const result = await response.json();
@@ -163,6 +231,13 @@ class AnalyticsService {
       
     } catch (error) {
       console.error('❌ Failed to record analytics event:', error);
+      console.error('❌ Error details:', {
+        message: error.message,
+        stack: error.stack,
+        trailId,
+        eventType,
+        data
+      });
       // Don't throw - we don't want analytics failures to break the app
     }
   }

@@ -717,14 +717,20 @@ const TrailAnalytics: React.FC = () => {
                         const dayData = realAnalytics?.revenueByDay?.find(item => item.date === dateKey);
                         
                         return {
-                          day: `${currentDate.toLocaleDateString('en-US', { weekday: 'short' })} ${currentDate.getDate()}${getOrdinalSuffix(currentDate.getDate())}`,
+                          day: `${currentDate.toLocaleDateString('en-US', { weekday: 'short' })} ${currentDate.getDate()}`,
                           [dataKey]: dayData && dayData[dataKey] !== undefined ? Number(dayData[dataKey].toFixed(2)) : 0
                         };
                       });
                                                                       return (
                           <LineChart data={allDays}>
                             <CartesianGrid strokeDasharray="3 3" />
-                            <XAxis dataKey="day" />
+                            <XAxis 
+                              dataKey="day" 
+                              angle={-45}
+                              textAnchor="end"
+                              height={60}
+                              interval={0}
+                            />
                             <YAxis />
                             <Tooltip formatter={(value) => [`$${Number(value).toFixed(2)}`, '']} labelFormatter={() => ''} />
                             <Line type="monotone" dataKey={dataKey} stroke={strokeColor} strokeWidth={2} />
@@ -759,7 +765,12 @@ const TrailAnalytics: React.FC = () => {
                 <ResponsiveContainer width="100%" height="100%">
                   <LineChart data={realAnalytics?.tipsOverTime || []}>
                     <CartesianGrid strokeDasharray="3 3" />
-                    <XAxis dataKey="date" />
+                    <XAxis 
+                      dataKey="date" 
+                      angle={-45}
+                      textAnchor="end"
+                      height={60}
+                    />
                     <YAxis />
                     <Tooltip formatter={(value) => [`$${Number(value).toFixed(2)}`, '']} />
                     <Line type="monotone" dataKey="amount" stroke="#f97316" strokeWidth={2} />
@@ -1017,14 +1028,20 @@ const TrailAnalytics: React.FC = () => {
                         const dayData = realAnalytics?.learnersByDay?.find(item => item.date === dateKey);
                         
                         return {
-                          day: `${currentDate.toLocaleDateString('en-US', { weekday: 'short' })} ${currentDate.getDate()}${getOrdinalSuffix(currentDate.getDate())}`,
+                          day: `${currentDate.toLocaleDateString('en-US', { weekday: 'short' })} ${currentDate.getDate()}`,
                           [dataKey]: dayData ? Number(dayData[dataKey]) : 0
                         };
                       });
                       return (
                         <LineChart data={allDays}>
                           <CartesianGrid strokeDasharray="3 3" />
-                          <XAxis dataKey="day" />
+                          <XAxis 
+                            dataKey="day" 
+                            angle={-45}
+                            textAnchor="end"
+                            height={60}
+                            interval={0}
+                          />
                           <YAxis />
                           <Tooltip formatter={(value) => [value, '']} labelFormatter={() => ''} />
                           <Line type="monotone" dataKey={dataKey} stroke={strokeColor} strokeWidth={2} />
@@ -1286,14 +1303,20 @@ const TrailAnalytics: React.FC = () => {
                         const dayData = dailyData.find(item => item.date === dateKey);
                         
                         return {
-                          day: `${currentDate.toLocaleDateString('en-US', { weekday: 'short' })} ${currentDate.getDate()}${getOrdinalSuffix(currentDate.getDate())}`,
+                          day: `${currentDate.toLocaleDateString('en-US', { weekday: 'short' })} ${currentDate.getDate()}`,
                           [dataKey]: dayData ? Number(dayData[dataKey]) : 0
                         };
                       });
                       return (
                         <LineChart data={allDays}>
                           <CartesianGrid strokeDasharray="3 3" />
-                          <XAxis dataKey="day" />
+                          <XAxis 
+                            dataKey="day" 
+                            angle={-45}
+                            textAnchor="end"
+                            height={60}
+                            interval={0}
+                          />
                           <YAxis domain={[0, 100]} />
                           <Tooltip formatter={(value) => [`${Number(value).toFixed(1)}%`, '']} labelFormatter={() => ''} />
                           <Line type="monotone" dataKey={dataKey} stroke={strokeColor} strokeWidth={2} />
@@ -1751,7 +1774,7 @@ const TrailAnalytics: React.FC = () => {
                         const dayData = realAnalytics?.watchTimeByDay?.find(item => item.date === dateKey);
                         
                         return {
-                          day: `${day.slice(0, 3)} ${currentDate.getDate()}${getOrdinalSuffix(currentDate.getDate())}`,
+                          day: `${day.slice(0, 3)} ${currentDate.getDate()}`,
                           [dataKey]: dayData ? Number(dayData[dataKey]) / 60 : 0 // Convert minutes to hours
                         };
                       });
@@ -1759,7 +1782,13 @@ const TrailAnalytics: React.FC = () => {
                       return (
                         <LineChart data={allDays}>
                           <CartesianGrid strokeDasharray="3 3" />
-                          <XAxis dataKey="day" />
+                          <XAxis 
+                            dataKey="day" 
+                            angle={-45}
+                            textAnchor="end"
+                            height={60}
+                            interval={0}
+                          />
                           <YAxis tickFormatter={(value) => {
                             // Format to show whole numbers or max 1 decimal place
                             const formattedValue = Number(value) < 1 ? Number(value).toFixed(1) : Math.round(Number(value));

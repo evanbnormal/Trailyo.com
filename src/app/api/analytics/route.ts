@@ -124,6 +124,7 @@ function calculateAnalyticsFromEvents(events: Array<{
   const stepSkips = events.filter(e => e.eventType === 'step_skip');
   const tips = events.filter(e => e.eventType === 'tip_donated');
   const stepCompletions = events.filter(e => e.eventType === 'step_complete');
+  const trailCompletions = events.filter(e => e.eventType === 'trail_complete');
 
   const activeSessionIds = new Set();
   trailViews.forEach(trailView => {
@@ -211,12 +212,51 @@ function calculateAnalyticsFromEvents(events: Array<{
   }, 0);
 
   // 4. COMPLETION RATE
-  // Find the highest step index that was completed
+  // Count users who completed the trail through various methods
   const completedStepIndices = stepCompletions.map(e => (e.data.stepIndex as number) || 0);
-  const maxCompletedStep = completedStepIndices.length > 0 ? Math.max(...completedStepIndices) : -1;
+  const skippedStepIndices = stepSkips.map(e => (e.data.stepIndex as number) || 0);
+  const allStepIndices = [...completedStepIndices, ...skippedStepIndices];
+  const maxStepIndex = allStepIndices.length > 0 ? Math.max(...allStepIndices) : -1;
   
-  // Calculate completion rate based on completing any step (not just the final step)
-  const completionRate = totalLearners > 0 ? (stepCompletions.length / totalLearners) * 100 : 0;
+  // Count users who reached the final step (either by completing or skipping)
+  const usersWhoReachedFinalStep = new Set();
+  
+  // Add users who completed the final step
+  stepCompletions.forEach(event => {
+    const stepIndex = event.data.stepIndex as number;
+    if (stepIndex === maxStepIndex) {
+      const sessionId = event.data.sessionId as string;
+      if (sessionId) usersWhoReachedFinalStep.add(sessionId);
+    }
+  });
+  
+  // Add users who skipped to the final step
+  stepSkips.forEach(event => {
+    const stepIndex = event.data.stepIndex as number;
+    if (stepIndex === maxStepIndex) {
+      const sessionId = event.data.sessionId as string;
+      if (sessionId) usersWhoReachedFinalStep.add(sessionId);
+    }
+  });
+  
+  // Add users who completed the entire trail (trail_complete event)
+  trailCompletions.forEach(event => {
+    const sessionId = event.data.sessionId as string;
+    if (sessionId) usersWhoReachedFinalStep.add(sessionId);
+  });
+  
+  // Calculate completion rate based on reaching the final step or completing the trail
+  const totalCompletions = usersWhoReachedFinalStep.size + trailCompletions.length;
+  const completionRate = totalLearners > 0 ? (totalCompletions / totalLearners) * 100 : 0;
+
+  console.log('📊 Completion rate calculation:', {
+    totalLearners,
+    usersWhoReachedFinalStep: Array.from(usersWhoReachedFinalStep),
+    trailCompletionsCount: trailCompletions.length,
+    totalCompletions,
+    completionRate,
+    maxStepIndex
+  });
 
   // 5. RETENTION RATE (how many people reached each step)
   // Determine the number of steps based on the highest step index seen
@@ -224,10 +264,28 @@ function calculateAnalyticsFromEvents(events: Array<{
   const maxRetentionStepIndex = retentionStepIndices.length > 0 ? Math.max(...retentionStepIndices) : 0;
   const stepReachCounts = new Array(maxRetentionStepIndex + 1).fill(0);
   
+  // Count users who completed steps
   stepCompletions.forEach(event => {
     const stepIndex = event.data.stepIndex as number;
     if (stepIndex >= 0 && stepIndex < stepReachCounts.length) {
       stepReachCounts[stepIndex]++;
+    }
+  });
+
+  // Count users who skipped to steps (including reward step)
+  stepSkips.forEach(event => {
+    const stepIndex = event.data.stepIndex as number;
+    if (stepIndex >= 0 && stepIndex < stepReachCounts.length) {
+      stepReachCounts[stepIndex]++;
+    }
+  });
+
+  // Count users who tipped (indicates they reached the reward step - step 1)
+  tipEvents.forEach(event => {
+    // Tips are always for the reward step (step 1)
+    const rewardStepIndex = 1;
+    if (rewardStepIndex < stepReachCounts.length) {
+      stepReachCounts[rewardStepIndex]++;
     }
   });
 
@@ -247,8 +305,32 @@ function calculateAnalyticsFromEvents(events: Array<{
   const sortedEvents = events.sort((a, b) => a.timestamp.getTime() - b.timestamp.getTime());
   const sortedVideoWatches = videoWatches.sort((a, b) => a.timestamp.getTime() - b.timestamp.getTime());
 
-  // Calculate daily completions
+  // Calculate daily completions (including trail completions and skips to final step)
+  const dailyStepIndices = [...stepCompletions.map(e => (e.data.stepIndex as number) || 0), ...stepSkips.map(e => (e.data.stepIndex as number) || 0)];
+  const dailyMaxStepIndex = dailyStepIndices.length > 0 ? Math.max(...dailyStepIndices) : -1;
+  
+  // Count step completions
   stepCompletions.forEach(event => {
+    const stepIndex = event.data.stepIndex as number;
+    if (stepIndex === dailyMaxStepIndex) { // Only count final step completions
+      const date = event.timestamp;
+      const dayKey = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
+      dailyCompletions.set(dayKey, (dailyCompletions.get(dayKey) || 0) + 1);
+    }
+  });
+  
+  // Count skips to final step
+  stepSkips.forEach(event => {
+    const stepIndex = event.data.stepIndex as number;
+    if (stepIndex === dailyMaxStepIndex) { // Only count skips to final step
+      const date = event.timestamp;
+      const dayKey = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
+      dailyCompletions.set(dayKey, (dailyCompletions.get(dayKey) || 0) + 1);
+    }
+  });
+  
+  // Count trail completions
+  trailCompletions.forEach(event => {
     const date = event.timestamp;
     const dayKey = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
     dailyCompletions.set(dayKey, (dailyCompletions.get(dayKey) || 0) + 1);

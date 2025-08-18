@@ -4,6 +4,12 @@ import { db } from '@/lib/db';
 export async function GET(request: NextRequest) {
   try {
     console.log('🧪 Testing analytics endpoint...');
+    console.log('🧪 Environment check:', {
+      nodeEnv: process.env.NODE_ENV,
+      databaseUrl: process.env.DATABASE_URL ? 'Set' : 'Not set',
+      baseUrl: process.env.BASE_URL || 'Not set',
+      timestamp: new Date().toISOString()
+    });
     
     // Test database connection
     const testEvent = await db.trailAnalyticsEvent.create({
@@ -25,22 +31,47 @@ export async function GET(request: NextRequest) {
     
     console.log('📊 Total events in database:', allEvents.length);
     
+    // Get events by type
+    const eventsByType = await db.trailAnalyticsEvent.groupBy({
+      by: ['eventType'],
+      _count: {
+        eventType: true
+      }
+    });
+    
+    console.log('📊 Events by type:', eventsByType);
+    
     return NextResponse.json({
       success: true,
       testEvent,
       totalEvents: allEvents.length,
+      eventsByType,
       recentEvents: allEvents.slice(0, 5).map(e => ({
         id: e.id,
         trailId: e.trailId,
         eventType: e.eventType,
         timestamp: e.timestamp
-      }))
+      })),
+      environment: {
+        nodeEnv: process.env.NODE_ENV,
+        databaseUrl: process.env.DATABASE_URL ? 'Set' : 'Not set',
+        baseUrl: process.env.BASE_URL || 'Not set'
+      }
     });
     
   } catch (error) {
     console.error('❌ Analytics test failed:', error);
     return NextResponse.json(
-      { error: 'Analytics test failed', details: error.message },
+      { 
+        error: 'Analytics test failed', 
+        details: error.message,
+        stack: error.stack,
+        environment: {
+          nodeEnv: process.env.NODE_ENV,
+          databaseUrl: process.env.DATABASE_URL ? 'Set' : 'Not set',
+          baseUrl: process.env.BASE_URL || 'Not set'
+        }
+      },
       { status: 500 }
     );
   }
