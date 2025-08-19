@@ -274,6 +274,12 @@ function calculateAnalyticsFromEvents(events: Array<{
     if (sessionId) usersWhoReachedFinalStep.add(sessionId);
   });
   
+  // Add users who tipped (indicates they reached the reward step, which counts as completing the trail)
+  tipEvents.forEach(event => {
+    const sessionId = event.data.sessionId as string;
+    if (sessionId) usersWhoReachedFinalStep.add(sessionId);
+  });
+  
   // Calculate completion rate based on unique users who reached the final step
   const completionRate = totalLearners > 0 ? Math.min((usersWhoReachedFinalStep.size / totalLearners) * 100, 100) : 0;
 
@@ -299,6 +305,15 @@ function calculateAnalyticsFromEvents(events: Array<{
   
   // Count unique users who completed steps
   stepCompletions.forEach(event => {
+    const stepIndex = event.data.stepIndex as number;
+    const sessionId = event.data.sessionId as string;
+    if (stepIndex >= 0 && stepIndex < stepReachCounts.length && sessionId) {
+      stepUserSets[stepIndex].add(sessionId);
+    }
+  });
+
+  // Count unique users who watched videos (indicates they reached that step)
+  videoWatches.forEach(event => {
     const stepIndex = event.data.stepIndex as number;
     const sessionId = event.data.sessionId as string;
     if (stepIndex >= 0 && stepIndex < stepReachCounts.length && sessionId) {
