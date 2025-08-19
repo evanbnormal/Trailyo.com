@@ -115,6 +115,9 @@ const LearnerView: React.FC = () => {
   const [skipPaymentTarget, setSkipPaymentTarget] = useState<number | null>(null);
   const [showLoginModal, setShowLoginModal] = useState(false);
   
+  // Generate a consistent session ID for this user session
+  const sessionId = useRef(`session_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`).current;
+  
   // Video tracking
   const [videoWatchTime, setVideoWatchTime] = useState<Record<number, number>>({});
   const [videoCompleted, setVideoCompleted] = useState<Record<number, boolean>>({});
@@ -201,7 +204,7 @@ const LearnerView: React.FC = () => {
             setTrailLoaded(true);
             
             // Track trail view
-            analyticsService.trackTrailView(actualTrailId, publicTrail.title);
+            analyticsService.trackTrailView(actualTrailId, publicTrail.title, sessionId);
             
             // If user is authenticated, try to load their saved progress
             if (isAuthenticated && user) {
@@ -277,8 +280,8 @@ const LearnerView: React.FC = () => {
                   setVideoWatchTime(savedTrail.videoWatchTime);
                 }
                 
-                // Track trail view
-                analyticsService.trackTrailView(actualTrailId, savedTrail.title);
+                            // Track trail view
+            analyticsService.trackTrailView(actualTrailId, savedTrail.title, sessionId);
               }
               return; // Exit early if found
             }
@@ -304,7 +307,7 @@ const LearnerView: React.FC = () => {
                 };
                 setTrail(trailWithCreator);
                 setTrailLoaded(true);
-                analyticsService.trackTrailView(actualTrailId, foundTrail.title);
+                analyticsService.trackTrailView(actualTrailId, foundTrail.title, sessionId);
               }
               return; // Exit early if found
             }
@@ -346,8 +349,8 @@ const LearnerView: React.FC = () => {
             }
           }
           
-          // Track trail view
-          analyticsService.trackTrailView(actualTrailId, foundTrail.title);
+                      // Track trail view
+            analyticsService.trackTrailView(actualTrailId, foundTrail.title, sessionId);
         }
       }
       
@@ -419,7 +422,7 @@ const LearnerView: React.FC = () => {
         } as Trail);
         setTrailLoaded(true);
         // Track trail view for demo trail
-        analyticsService.trackTrailView('demo-trail', fallbackTrail.title);
+        analyticsService.trackTrailView('demo-trail', fallbackTrail.title, sessionId);
       }
     } else if (actualTrailId) {
       // Load actual trail by ID
@@ -530,7 +533,7 @@ const LearnerView: React.FC = () => {
 
                   // Track video watch time in analytics (in minutes)
                   const watchTimeMinutes = watchTimeRef.current[stepIndex].totalWatched / 60;
-                  analyticsService.trackVideoWatch(trail.id, stepIndex, trail.steps[stepIndex].title, watchTimeMinutes);
+                  analyticsService.trackVideoWatch(trail.id, stepIndex, trail.steps[stepIndex].title, watchTimeMinutes, sessionId);
 
                   if (watchedPercentage >= 80) {
                     setVideoCompleted(prev => ({
@@ -564,8 +567,8 @@ const LearnerView: React.FC = () => {
                 
                 // Only complete the step if user watched enough
                 if (stepIndex === currentStepIndex) {
-                  // Track step completion
-                  analyticsService.trackStepComplete(trail.id, stepIndex, trail.steps[stepIndex].title);
+                      // Track step completion
+    analyticsService.trackStepComplete(trail.id, stepIndex, trail.steps[stepIndex].title, sessionId);
                   
                   // Mark step as completed
                   setCompletedSteps(prev => new Set([...prev, stepIndex]));
@@ -573,7 +576,7 @@ const LearnerView: React.FC = () => {
                   // If this is the final step, mark trail as completed
                   if (stepIndex === trail.steps.length - 1) {
                     setCompleted(true);
-                    analyticsService.trackTrailComplete(trail.id);
+                    analyticsService.trackTrailComplete(trail.id, sessionId);
                   }
                 }
               } else {
@@ -713,14 +716,14 @@ const LearnerView: React.FC = () => {
     if (!currentStep) return;
 
     // Track step completion
-    analyticsService.trackStepComplete(trail.id, currentStepIndex, currentStep.title);
+    analyticsService.trackStepComplete(trail.id, currentStepIndex, currentStep.title, sessionId);
 
     // If this is a video step, track video completion
     if (currentStep.type === 'video' && videoWatchTime[currentStepIndex]) {
       const watchPercentage = videoWatchTime[currentStepIndex];
       // Convert percentage to minutes (assuming 5 minute video)
       const watchTimeMinutes = (watchPercentage / 100) * 5;
-      analyticsService.trackVideoWatch(trail.id, currentStepIndex, currentStep.title, watchTimeMinutes);
+      analyticsService.trackVideoWatch(trail.id, currentStepIndex, currentStep.title, watchTimeMinutes, sessionId);
     }
 
     // Mark current step as completed
@@ -732,7 +735,7 @@ const LearnerView: React.FC = () => {
     if (currentStepIndex === trail.steps.length - 1) {
       setCompleted(true);
       // Track trail completion
-      analyticsService.trackTrailComplete(trail.id);
+      analyticsService.trackTrailComplete(trail.id, sessionId);
       return;
     }
 
@@ -781,14 +784,14 @@ const LearnerView: React.FC = () => {
     if (!currentStep) return;
 
     // Track step completion
-    analyticsService.trackStepComplete(trail.id, stepIndex, currentStep.title);
+    analyticsService.trackStepComplete(trail.id, stepIndex, currentStep.title, sessionId);
 
     // If this is a video step, track video completion
     if (currentStep.type === 'video' && videoWatchTime[stepIndex]) {
       const watchPercentage = videoWatchTime[stepIndex];
       // Convert percentage to minutes (assuming 5 minute video)
       const watchTimeMinutes = (watchPercentage / 100) * 5;
-      analyticsService.trackVideoWatch(trail.id, stepIndex, currentStep.title, watchTimeMinutes);
+      analyticsService.trackVideoWatch(trail.id, stepIndex, currentStep.title, watchTimeMinutes, sessionId);
     }
 
     // Add current step to completed steps
@@ -812,7 +815,7 @@ const LearnerView: React.FC = () => {
       // Trail completed
       setCompleted(true);
       // Track trail completion
-      analyticsService.trackTrailComplete(trail.id);
+      analyticsService.trackTrailComplete(trail.id, sessionId);
       toast({
         title: "Congratulations!",
         description: "You have completed the trail!",
@@ -930,7 +933,7 @@ const LearnerView: React.FC = () => {
     // Track step skip with cost
     const skipCost = getSkipCost(skipToStep);
     const currentStep = trail.steps[currentStepIndex];
-    analyticsService.trackStepSkip(trail.id, currentStepIndex, currentStep.title, skipCost);
+            analyticsService.trackStepSkip(trail.id, currentStepIndex, currentStep.title, skipCost, sessionId);
 
     // Instantly mark all previous steps as completed (no animation)
     const newCompletedSteps = new Set(completedSteps);
@@ -1084,7 +1087,7 @@ const LearnerView: React.FC = () => {
                     title: "Thank you!",
                     description: `You've successfully tipped $${tipAmount || trail?.suggestedInvestment || 25} to ${getCreatorName(trail?.creator)}!`,
                   });
-                  analyticsService.trackTipDonated(trail?.id || '', tipAmount);
+                  analyticsService.trackTipDonated(trail?.id || '', tipAmount, sessionId);
                   setTipCompleted(true);
                   setShowTipModal(false);
                   showTipModalRef.current = false;
@@ -1866,7 +1869,7 @@ const LearnerView: React.FC = () => {
                   setCurrentStepIndex(skipPaymentTarget);
                   
                   // Track skip payment
-                  analyticsService.trackStepSkip(trail.id, skipPaymentTarget || 0, `Step ${skipPaymentTarget ? skipPaymentTarget + 1 : ''}`, skipPaymentAmount);
+                  analyticsService.trackStepSkip(trail.id, skipPaymentTarget || 0, `Step ${skipPaymentTarget ? skipPaymentTarget + 1 : ''}`, skipPaymentAmount, sessionId);
                 }
                 
                 toast({
