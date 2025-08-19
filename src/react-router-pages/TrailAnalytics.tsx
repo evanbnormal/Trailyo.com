@@ -19,6 +19,7 @@ interface AnalyticsData {
   completionRate: number;
   retentionRate: Array<{
     step: number;
+    stepTitle: string;
     learnersReached: number;
     retentionRate: number;
   }>;
@@ -1496,18 +1497,19 @@ const TrailAnalytics: React.FC = () => {
                 <ResponsiveContainer width="100%" height="100%">
                   <LineChart data={realAnalytics?.retentionByStep?.map(item => ({
                     step: item.step,
+                    stepTitle: item.stepTitle || `Step ${item.step + 1}`,
                     retentionRate: item.retentionRate,
                     learnersReached: item.learnersReached
                   })) || []}>
                     <CartesianGrid strokeDasharray="3 3" />
-                    <XAxis dataKey="step" />
+                    <XAxis dataKey="stepTitle" />
                     <YAxis />
                     <Tooltip formatter={(value, name, props) => {
                       if (name === 'retentionRate') {
-                        return [`Learners ${props.payload.learnersReached}`, ''];
+                        return [`${value}% (${props.payload.learnersReached} learners)`, 'Retention Rate'];
                       }
-                      return [value, ''];
-                    }} labelFormatter={() => ''} />
+                      return [value, name];
+                    }} labelFormatter={(label) => label} />
                     <YAxis tickFormatter={(value) => `${value}%`} />
                     <Line type="monotone" dataKey="retentionRate" stroke="#10b981" strokeWidth={2} />
                   </LineChart>

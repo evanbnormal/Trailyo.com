@@ -38,13 +38,19 @@ export async function GET(request: NextRequest) {
       });
     }
 
+    // Get trail information to include step titles
+    const trail = await db.trail.findUnique({
+      where: { id: trailId },
+      include: { steps: { orderBy: { order: 'asc' } } }
+    });
+
     // Calculate analytics from events
     const analytics = calculateAnalyticsFromEvents(events.map(event => ({
       trailId: event.trailId,
       eventType: event.eventType,
       data: event.data as Record<string, unknown>,
       timestamp: event.timestamp
-    })));
+    })), trail);
 
     return NextResponse.json(analytics);
   } catch (error) {
@@ -117,7 +123,7 @@ function calculateAnalyticsFromEvents(events: Array<{
   eventType: string;
   data: Record<string, unknown>;
   timestamp: Date;
-}>) {
+}>, trail?: any) {
   // 1. TOTAL LEARNERS: Count unique active learners (people who take action)
   const trailViews = events.filter(e => e.eventType === 'trail_view');
   const videoWatches = events.filter(e => e.eventType === 'video_watch');
@@ -280,9 +286,12 @@ function calculateAnalyticsFromEvents(events: Array<{
   });
 
   // 5. RETENTION RATE (how many people reached each step)
-  // Determine the number of steps based on the highest step index seen
+  // Determine the number of steps based on the highest step index seen or trail steps
   const retentionStepIndices = [...stepCompletions.map(e => (e.data.stepIndex as number) || 0), ...stepSkips.map(e => (e.data.stepIndex as number) || 0)];
-  const maxRetentionStepIndex = retentionStepIndices.length > 0 ? Math.max(...retentionStepIndices) : 0;
+  const maxRetentionStepIndex = Math.max(
+    retentionStepIndices.length > 0 ? Math.max(...retentionStepIndices) : 0,
+    trail?.steps?.length ? trail.steps.length - 1 : 0
+  );
   const stepReachCounts = new Array(maxRetentionStepIndex + 1).fill(0);
   
   // Track unique users per step to avoid double counting
@@ -320,11 +329,22 @@ function calculateAnalyticsFromEvents(events: Array<{
     stepReachCounts[index] = userSet.size;
   });
 
-  const retentionRate = stepReachCounts.map((count, index) => ({
-    step: index,
-    learnersReached: count,
-    retentionRate: totalLearners > 0 ? Math.min((count / totalLearners) * 100, 100) : 0
-  }));
+  const retentionRate = stepReachCounts.map((count, index) => {
+    // Get step title from trail data or use default naming
+    let stepTitle = `Step ${index + 1}`;
+    if (trail?.steps && trail.steps[index]) {
+      stepTitle = trail.steps[index].title;
+    } else if (index === 1) {
+      stepTitle = 'Reward'; // Default for reward step
+    }
+    
+    return {
+      step: index,
+      stepTitle: stepTitle,
+      learnersReached: count,
+      retentionRate: totalLearners > 0 ? Math.min((count / totalLearners) * 100, 100) : 0
+    };
+  });
 
   console.log('📊 Retention rate calculation:', {
     totalLearners,
