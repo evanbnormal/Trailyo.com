@@ -436,7 +436,7 @@ function calculateAnalyticsFromEvents(events: Array<{
   const completionRateByDay = Array.from(dailyCompletions.entries())
     .sort(([a], [b]) => a.localeCompare(b))
     .map(([date, completions]) => {
-      const totalLearners = dailyLearners.get(date) || 0;
+      const totalLearners = learnersByDay.get(date)?.size || 0;
       const completionRate = totalLearners > 0 ? (completions / totalLearners) * 100 : 0;
       return { date, completionRate };
     });

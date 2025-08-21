@@ -1215,68 +1215,70 @@ const LearnerView: React.FC = () => {
       )}
       <div className="min-h-screen bg-gray-50 flex flex-col">
         {/* Header */}
-        <div className="flex flex-row items-center justify-between px-6 md:px-16 pt-8 pb-2 mb-16">
-          <div>
-            <h1 className="text-4xl font-extrabold text-gray-900 truncate overflow-hidden whitespace-nowrap">{trail.title}</h1>
-            <p className="text-gray-600">{trail.description}</p>
-            <div className="flex items-center gap-2 mt-1">
-              <span className="text-gray-700 font-semibold">{getCreatorName(trail.creator)}</span>
-              <span className="inline-flex items-center justify-center w-5 h-5">
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                  <circle cx="12" cy="12" r="12" fill="#2196F3" />
-                  <path d="M7 13l3 3 7-7" stroke="#fff" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"/>
-                </svg>
-              </span>
-            </div>
-          </div>
-          <div className="flex flex-row items-center justify-end gap-4 w-full md:w-auto">
-            <Button 
-              variant="outline" 
-              onClick={() => setIsOverviewMode(!isOverviewMode)}
-              className="flex items-center gap-2"
-            >
-              {isOverviewMode ? <Shrink className="h-4 w-4" /> : <Expand className="h-4 w-4" />}
-              {isOverviewMode ? 'Focus View' : 'Overview'}
-            </Button>
-            {/* Reward Progress Tracker */}
-            <div className="relative flex flex-col items-center">
-              <div className="w-16 h-16 relative">
-                <svg className="w-16 h-16" viewBox="0 0 44 44">
-                  {/* Background circle */}
-                  <circle
-                    cx="22" cy="22" r="18"
-                    fill="none"
-                    stroke="#f3f4f6"
-                    strokeWidth="3"
-                  />
-                  {/* Progress circle */}
-                  <motion.circle
-                    cx="22" cy="22" r="18"
-                    fill="none"
-                    stroke="#fbbf24"
-                    strokeWidth="3"
-                    strokeLinecap="round"
-                    strokeDasharray="113.1"
-                    strokeDashoffset="113.1"
-                    initial={{ strokeDashoffset: 113.1 }}
-                    animate={{ strokeDashoffset: 113.1 - ((progressPercentage / 100) * 113.1) }}
-                    transition={{ duration: 0.8, ease: "easeOut" }}
-                    style={{ transformOrigin: "center", transform: "rotate(-90deg)" }}
-                  />
-                </svg>
-                <div className="absolute inset-0 flex items-center justify-center">
-                  <Gift className="h-9 w-9 text-yellow-500" fill="none" />
-                </div>
+        <div className="flex flex-col items-center px-6 md:px-16 pt-8 pb-2 mb-16">
+          <div className="max-w-4xl w-full flex flex-row items-center justify-between">
+            <div className="flex-1">
+              <h1 className="text-4xl font-extrabold text-gray-900 truncate overflow-hidden whitespace-nowrap">{trail.title}</h1>
+              <p className="text-gray-600">{trail.description}</p>
+              <div className="flex items-center gap-2 mt-1">
+                <span className="text-gray-700 font-semibold">{getCreatorName(trail.creator)}</span>
+                <span className="inline-flex items-center justify-center w-5 h-5">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                    <circle cx="12" cy="12" r="12" fill="#2196F3" />
+                    <path d="M7 13l3 3 7-7" stroke="#fff" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"/>
+                  </svg>
+                </span>
               </div>
-              <motion.span 
-                className="block text-center text-sm font-semibold text-gray-700 mt-1"
-                key={progressPercentage}
-                initial={{ opacity: 0, scale: 0.8 }}
-                animate={{ opacity: 1, scale: 1 }}
-                transition={{ duration: 0.3 }}
+            </div>
+            <div className="flex flex-row items-center justify-end gap-4 ml-8">
+              <Button 
+                variant="outline" 
+                onClick={() => setIsOverviewMode(!isOverviewMode)}
+                className="flex items-center gap-2"
               >
-                {Math.round(progressPercentage)}%
-              </motion.span>
+                {isOverviewMode ? <Shrink className="h-4 w-4" /> : <Expand className="h-4 w-4" />}
+                {isOverviewMode ? 'Focus View' : 'Overview'}
+              </Button>
+              {/* Reward Progress Tracker */}
+              <div className="relative flex flex-col items-center">
+                <div className="w-16 h-16 relative">
+                  <svg className="w-16 h-16" viewBox="0 0 44 44">
+                    {/* Background circle */}
+                    <circle
+                      cx="22" cy="22" r="18"
+                      fill="none"
+                      stroke="#f3f4f6"
+                      strokeWidth="3"
+                    />
+                    {/* Progress circle */}
+                    <motion.circle
+                      cx="22" cy="22" r="18"
+                      fill="none"
+                      stroke="#fbbf24"
+                      strokeWidth="3"
+                      strokeLinecap="round"
+                      strokeDasharray="113.1"
+                      strokeDashoffset="113.1"
+                      initial={{ strokeDashoffset: 113.1 }}
+                      animate={{ strokeDashoffset: 113.1 - ((progressPercentage / 100) * 113.1) }}
+                      transition={{ duration: 0.8, ease: "easeOut" }}
+                      style={{ transformOrigin: "center", transform: "rotate(-90deg)" }}
+                    />
+                  </svg>
+                  <div className="absolute inset-0 flex items-center justify-center">
+                    <Gift className="h-9 w-9 text-yellow-500" fill="none" />
+                  </div>
+                </div>
+                <motion.span 
+                  className="block text-center text-sm font-semibold text-gray-700 mt-1"
+                  key={progressPercentage}
+                  initial={{ opacity: 0, scale: 0.8 }}
+                  animate={{ opacity: 1, scale: 1 }}
+                  transition={{ duration: 0.3 }}
+                >
+                  {Math.round(progressPercentage)}%
+                </motion.span>
+              </div>
             </div>
           </div>
         </div>

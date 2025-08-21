@@ -1237,7 +1237,17 @@ const TrailAnalytics: React.FC = () => {
                           <CartesianGrid strokeDasharray="3 3" />
                           <XAxis dataKey="date" />
                           <YAxis domain={[0, 100]} />
-                          <Tooltip formatter={(value) => [`${Number(value).toFixed(1)}%`, '']} labelFormatter={() => ''} />
+                          <Tooltip 
+                            formatter={(value) => [`${Number(value).toFixed(1)}%`, '']} 
+                            labelFormatter={() => ''}
+                            contentStyle={{
+                              backgroundColor: 'white',
+                              border: '1px solid #e5e7eb',
+                              borderRadius: '8px',
+                              boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)',
+                              padding: '8px 12px'
+                            }}
+                          />
                           <Line type="monotone" dataKey={dataKey} stroke={strokeColor} strokeWidth={2} />
                         </LineChart>
                       );
@@ -1271,7 +1281,17 @@ const TrailAnalytics: React.FC = () => {
                           <CartesianGrid strokeDasharray="3 3" />
                           <XAxis dataKey="week" />
                           <YAxis domain={[0, 100]} />
-                          <Tooltip formatter={(value) => [`${Number(value).toFixed(1)}%`, '']} labelFormatter={() => ''} />
+                          <Tooltip 
+                            formatter={(value) => [`${Number(value).toFixed(1)}%`, '']} 
+                            labelFormatter={() => ''}
+                            contentStyle={{
+                              backgroundColor: 'white',
+                              border: '1px solid #e5e7eb',
+                              borderRadius: '8px',
+                              boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)',
+                              padding: '8px 12px'
+                            }}
+                          />
                           <Line type="monotone" dataKey={dataKey} stroke={strokeColor} strokeWidth={2} />
                         </LineChart>
                       );
@@ -1319,7 +1339,17 @@ const TrailAnalytics: React.FC = () => {
                             interval={0}
                           />
                           <YAxis domain={[0, 100]} />
-                          <Tooltip formatter={(value) => [`${Number(value).toFixed(1)}%`, '']} labelFormatter={() => ''} />
+                          <Tooltip 
+                            formatter={(value) => [`${Number(value).toFixed(1)}%`, '']} 
+                            labelFormatter={() => ''}
+                            contentStyle={{
+                              backgroundColor: 'white',
+                              border: '1px solid #e5e7eb',
+                              borderRadius: '8px',
+                              boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)',
+                              padding: '8px 12px'
+                            }}
+                          />
                           <Line type="monotone" dataKey={dataKey} stroke={strokeColor} strokeWidth={2} />
                         </LineChart>
                       );
@@ -1504,12 +1534,22 @@ const TrailAnalytics: React.FC = () => {
                     <CartesianGrid strokeDasharray="3 3" />
                     <XAxis dataKey="stepTitle" />
                     <YAxis />
-                    <Tooltip formatter={(value, name, props) => {
-                      if (name === 'retentionRate') {
-                        return [`${value}% (${props.payload.learnersReached} learners)`, 'Retention Rate'];
-                      }
-                      return [value, name];
-                    }} labelFormatter={(label) => label} />
+                    <Tooltip 
+                      formatter={(value, name, props) => {
+                        if (name === 'retentionRate') {
+                          return [`${value}%`, ''];
+                        }
+                        return [value, name];
+                      }} 
+                      labelFormatter={(label) => label}
+                      contentStyle={{
+                        backgroundColor: 'white',
+                        border: '1px solid #e5e7eb',
+                        borderRadius: '8px',
+                        boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)',
+                        padding: '8px 12px'
+                      }}
+                    />
                     <YAxis tickFormatter={(value) => `${value}%`} />
                     <Line type="monotone" dataKey="retentionRate" stroke="#10b981" strokeWidth={2} />
                   </LineChart>
