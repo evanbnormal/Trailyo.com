@@ -273,7 +273,7 @@ const TrailAnalytics: React.FC = () => {
               totalRevenue: realAnalyticsData.totalRevenue,
               totalWatchTime: realAnalyticsData.totalWatchTime,
               completionRate: realAnalyticsData.completionRate,
-              retentionRate: (realAnalyticsData as any).retentionRate || [],
+              retentionRate: (realAnalyticsData as any).retentionByStep || [],
               revenueByStep: (realAnalyticsData as any).revenueByStep?.map((s: any) => ({
                 step: s.step,
                 title: s.title,
@@ -371,7 +371,7 @@ const TrailAnalytics: React.FC = () => {
             totalRevenue: realAnalyticsData.totalRevenue,
             totalWatchTime: realAnalyticsData.totalWatchTime,
             completionRate: realAnalyticsData.completionRate,
-            retentionRate: (realAnalyticsData as any).retentionRate || [],
+            retentionRate: (realAnalyticsData as any).retentionByStep || [],
             revenueByStep: (realAnalyticsData as any).revenueByStep?.map((s: any) => ({
               step: s.step,
               title: s.title,

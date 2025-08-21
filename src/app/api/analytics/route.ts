@@ -303,11 +303,19 @@ function calculateAnalyticsFromEvents(events: Array<{
   // Track unique users per step to avoid double counting
   const stepUserSets = new Array(maxRetentionStepIndex + 1).fill(null).map(() => new Set<string>());
   
-  // Count unique users who completed steps
+  // Step 0 (first step) should always have 100% retention - everyone who joins the trail starts here
+  // Add ALL unique users to step 0
+  allSessionIds.forEach(sessionId => {
+    if (stepUserSets[0]) {
+      stepUserSets[0].add(sessionId as string);
+    }
+  });
+  
+  // Count unique users who completed steps (for steps beyond 0)
   stepCompletions.forEach(event => {
     const stepIndex = event.data.stepIndex as number;
     const sessionId = event.data.sessionId as string;
-    if (stepIndex >= 0 && stepIndex < stepReachCounts.length && sessionId) {
+    if (stepIndex > 0 && stepIndex < stepReachCounts.length && sessionId) {
       stepUserSets[stepIndex].add(sessionId);
     }
   });
@@ -316,7 +324,7 @@ function calculateAnalyticsFromEvents(events: Array<{
   videoWatches.forEach(event => {
     const stepIndex = event.data.stepIndex as number;
     const sessionId = event.data.sessionId as string;
-    if (stepIndex >= 0 && stepIndex < stepReachCounts.length && sessionId) {
+    if (stepIndex > 0 && stepIndex < stepReachCounts.length && sessionId) {
       stepUserSets[stepIndex].add(sessionId);
     }
   });
@@ -325,7 +333,7 @@ function calculateAnalyticsFromEvents(events: Array<{
   stepSkips.forEach(event => {
     const stepIndex = event.data.stepIndex as number;
     const sessionId = event.data.sessionId as string;
-    if (stepIndex >= 0 && stepIndex < stepReachCounts.length && sessionId) {
+    if (stepIndex > 0 && stepIndex < stepReachCounts.length && sessionId) {
       stepUserSets[stepIndex].add(sessionId);
     }
   });
@@ -472,6 +480,68 @@ function calculateAnalyticsFromEvents(events: Array<{
     .sort(([a], [b]) => a.localeCompare(b))
     .map(([date, amount]) => ({ date, amount }));
 
+  // Calculate completion rate over time (monthly aggregation)
+  const completionRateOverTime: Array<{ date: string; completionRate: number }> = [];
+  const currentYear = new Date().getFullYear();
+  
+  // Generate monthly data for the current year
+  for (let month = 1; month <= 12; month++) {
+    const monthKey = `${currentYear}-${String(month).padStart(2, '0')}`;
+    
+    // Filter events for this month
+    const monthEvents = events.filter(event => {
+      const eventDate = event.timestamp;
+      return eventDate.getFullYear() === currentYear && eventDate.getMonth() === month - 1;
+    });
+    
+    // Count unique learners for this month
+    const monthLearners = new Set();
+    monthEvents.forEach(event => {
+      const sessionId = event.data.sessionId as string;
+      if (sessionId) monthLearners.add(sessionId);
+    });
+    
+    // Count completions for this month (trail completions, final step completions, skips to final step, tips)
+    const monthCompletions = new Set();
+    
+    // Trail completions
+    monthEvents.filter(e => e.eventType === 'trail_complete').forEach(event => {
+      const sessionId = event.data.sessionId as string;
+      if (sessionId) monthCompletions.add(sessionId);
+    });
+    
+    // Final step completions
+    monthEvents.filter(e => e.eventType === 'step_complete').forEach(event => {
+      const stepIndex = event.data.stepIndex as number;
+      if (stepIndex === maxStepIndex) {
+        const sessionId = event.data.sessionId as string;
+        if (sessionId) monthCompletions.add(sessionId);
+      }
+    });
+    
+    // Skips to final step
+    monthEvents.filter(e => e.eventType === 'step_skip').forEach(event => {
+      const stepIndex = event.data.stepIndex as number;
+      if (stepIndex === maxStepIndex) {
+        const sessionId = event.data.sessionId as string;
+        if (sessionId) monthCompletions.add(sessionId);
+      }
+    });
+    
+    // Tips (indicates completion)
+    monthEvents.filter(e => e.eventType === 'tip_donated').forEach(event => {
+      const sessionId = event.data.sessionId as string;
+      if (sessionId) monthCompletions.add(sessionId);
+    });
+    
+    const monthCompletionRate = monthLearners.size > 0 ? (monthCompletions.size / monthLearners.size) * 100 : 0;
+    
+    completionRateOverTime.push({
+      date: monthKey,
+      completionRate: monthCompletionRate
+    });
+  }
+
   return {
     trailId: events[0]?.trailId || '',
     totalLearners,
@@ -480,6 +550,7 @@ function calculateAnalyticsFromEvents(events: Array<{
     totalSkipRevenue,
     totalWatchTime,
     completionRate,
+    completionRateOverTime,
     retentionByStep: retentionRate,
     revenueByStep,
     completionRateByDay: completionRateByDay,
